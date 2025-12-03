@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lauhitya Reddy — Research Notes</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page-bg: #edf5ee;
+        --card-bg: rgba(241, 252, 244, 0.85);
+        --text: #0f2c1c;
+        --muted: #4f6c5d;
+        --accent: #37644c;
+        --cursor-x: 50%;
+        --cursor-y: 40%;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        background: var(--page-bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: clamp(2rem, 4vw, 4rem) clamp(1.5rem, 5vw, 6rem);
+        overflow-x: hidden;
+      }
+
+      .layout {
+        width: min(720px, 100%);
+        position: relative;
+        z-index: 1;
+      }
+
+      header {
+        margin-bottom: clamp(1.5rem, 3vw, 3rem);
+      }
+
+      h1 {
+        font-size: clamp(2.4rem, 4vw, 3.8rem);
+        margin: 0;
+        letter-spacing: -0.02em;
+      }
+
+      p {
+        margin: 0.7rem 0 0;
+        color: var(--muted);
+        font-size: clamp(1rem, 1.4vw, 1.2rem);
+        line-height: 1.6;
+      }
+
+      section {
+        background: var(--card-bg);
+        border-radius: 24px;
+        padding: clamp(1.5rem, 3vw, 2.5rem);
+        box-shadow: 0 18px 45px rgba(31, 84, 57, 0.12);
+        backdrop-filter: blur(6px);
+      }
+
+      section h2 {
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+        margin: 0 0 1rem;
+      }
+
+      section textarea {
+        width: 100%;
+        min-height: 180px;
+        border: 1px solid rgba(36, 78, 57, 0.2);
+        border-radius: 16px;
+        padding: 1.2rem;
+        font-size: 1rem;
+        font-family: inherit;
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--text);
+        resize: vertical;
+        transition: border-color 0.2s ease;
+      }
+
+      section textarea:focus {
+        outline: none;
+        border-color: rgba(55, 100, 76, 0.6);
+      }
+
+      canvas {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+        opacity: 0.78;
+        pointer-events: none;
+        filter: brightness(1.05) saturate(0.9);
+        -webkit-mask-image: radial-gradient(circle at var(--cursor-x) var(--cursor-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 18%, rgba(0, 0, 0, 0.35) 26%, rgba(0, 0, 0, 0) 32%);
+        mask-image: radial-gradient(circle at var(--cursor-x) var(--cursor-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 18%, rgba(0, 0, 0, 0.35) 26%, rgba(0, 0, 0, 0) 32%);
+      }
+
+      @media (pointer: coarse) {
+        canvas {
+          -webkit-mask-image: none;
+          mask-image: none;
+          opacity: 0.35;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="kolam" aria-hidden="true"></canvas>
+    <main class="layout">
+      <header>
+        <p>Personal Research Notebook</p>
+        <h1>Lauhitya Reddy</h1>
+      </header>
+
+      <section aria-label="Intro slot">
+        <h2>Intro</h2>
+        <textarea placeholder="Write your intro here..."></textarea>
+      </section>
+    </main>
+
+    <script>
+      const canvas = document.getElementById("kolam");
+      const ctx = canvas.getContext("2d");
+      const root = document.documentElement;
+
+      const params = {
+        spacing: 140,
+        maxDepth: 3,
+        influenceScale: 2.1,
+        flowSpeed: 0.26,
+        fluidVolume: 0.32,
+        depthLag: 0.18,
+        branchLag: 0.24,
+        basePipe: 1.5,
+        pipeTaper: 0.68,
+        flickerAmp: 0.08,
+      };
+      const glowColor = (alpha) => `rgba(198, 255, 211, ${alpha})`;
+      const emberColor = (alpha) => `rgba(86, 176, 129, ${alpha})`;
+      const clamp01 = (value) => Math.min(1, Math.max(0, value));
+      const fract = (value) => (value % 1 + 1) % 1;
+      const hash2d = (x, y) =>
+        fract(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453);
+
+      const viewport = { width: window.innerWidth, height: window.innerHeight };
+      const pointer = {
+        currentX: viewport.width * 0.5,
+        currentY: viewport.height * 0.4,
+        targetX: viewport.width * 0.5,
+        targetY: viewport.height * 0.4,
+      };
+      let animationFrame;
+      let currentSeconds = 0;
+
+      function computeFlow(travel) {
+        const cyclePos = fract(currentSeconds * params.flowSpeed - travel);
+        if (cyclePos < 0) return 0;
+        if (cyclePos > params.fluidVolume) return 0;
+        const normalized = 1 - cyclePos / params.fluidVolume;
+        return normalized * normalized;
+      }
+
+      function resizeCanvas() {
+        viewport.width = window.innerWidth;
+        viewport.height = window.innerHeight;
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = viewport.width * ratio;
+        canvas.height = viewport.height * ratio;
+        canvas.style.width = viewport.width + "px";
+        canvas.style.height = viewport.height + "px";
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(ratio, ratio);
+        pointer.currentX = pointer.targetX = viewport.width * 0.5;
+        pointer.currentY = pointer.targetY = viewport.height * 0.4;
+      }
+
+      function drawKolam(time = 0) {
+        currentSeconds = time * 0.001;
+        ctx.clearRect(0, 0, viewport.width, viewport.height);
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        const offset = params.spacing / 2;
+        pointer.currentX += (pointer.targetX - pointer.currentX) * 0.1;
+        pointer.currentY += (pointer.targetY - pointer.currentY) * 0.1;
+        const influence = params.spacing * params.influenceScale;
+
+        for (let y = -offset; y <= viewport.height + offset; y += params.spacing) {
+          for (let x = -offset; x <= viewport.width + offset; x += params.spacing) {
+            const dist = Math.hypot(x - pointer.currentX, y - pointer.currentY);
+            if (dist > influence) continue;
+            const proximity = Math.max(0, 1 - dist / influence);
+            const travel = dist / params.spacing;
+
+            drawKolamMotif(
+              x,
+              y,
+              params.spacing * 0.42,
+              params.maxDepth,
+              proximity,
+              travel
+            );
+          }
+        }
+        ctx.restore();
+      }
+
+      function drawKolamMotif(cx, cy, size, depth, proximity, travel) {
+        if (size < 6 || depth === 0) return;
+
+        const depthIndex = params.maxDepth - depth;
+        const localTravel = travel + depthIndex * params.depthLag;
+        const flowFill = computeFlow(localTravel);
+        const pipeDiameter = params.basePipe * Math.pow(params.pipeTaper, depthIndex);
+        const baseEnergy = clamp01(flowFill * 0.9 + proximity * 0.35);
+
+        const flickerSeed = hash2d(cx * 0.21, cy * 0.13 + depthIndex * 7.1);
+        const flickerWave =
+          Math.sin(currentSeconds * (1.2 + flickerSeed * 0.8) + flickerSeed * 11.7) * 0.5 + 0.5;
+        const microFlicker =
+          depth === 1 ? 1 + (flickerWave - 0.5) * params.flickerAmp : 1;
+
+        const energy = baseEnergy * microFlicker;
+
+        ctx.save();
+        ctx.globalAlpha *= 0.4 + proximity * 0.35 + energy * 0.4;
+        ctx.lineWidth = pipeDiameter * (0.85 + energy * 1.45);
+        ctx.shadowBlur = 5 + energy * 26;
+        ctx.shadowOffsetX = (pointer.currentX - cx) * 0.01 * energy;
+        ctx.shadowOffsetY = (pointer.currentY - cy) * 0.01 * energy;
+        ctx.shadowColor = emberColor(0.12 + energy * 0.6);
+        ctx.strokeStyle = glowColor(0.08 + energy * 0.82);
+
+        const curve = size * (0.72 + proximity * 0.2);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - size);
+        ctx.bezierCurveTo(cx + curve * 0.5, cy - size, cx + curve, cy - curve * 0.35, cx + curve, cy);
+        ctx.bezierCurveTo(cx + curve, cy + curve * 0.35, cx + curve * 0.5, cy + size, cx, cy + size);
+        ctx.bezierCurveTo(cx - curve * 0.5, cy + size, cx - curve, cy + curve * 0.35, cx - curve, cy);
+        ctx.bezierCurveTo(cx - curve, cy - curve * 0.35, cx - curve * 0.5, cy - size, cx, cy - size);
+        ctx.closePath();
+        ctx.stroke();
+
+        const diagonal = size * (0.65 + proximity * 0.25);
+        const arcReach = size * (1.05 + proximity * 0.25);
+        ctx.beginPath();
+        ctx.moveTo(cx - diagonal, cy - diagonal);
+        ctx.quadraticCurveTo(cx, cy - arcReach, cx + diagonal, cy - diagonal);
+        ctx.quadraticCurveTo(cx + arcReach, cy, cx + diagonal, cy + diagonal);
+        ctx.quadraticCurveTo(cx, cy + arcReach, cx - diagonal, cy + diagonal);
+        ctx.quadraticCurveTo(cx - arcReach, cy, cx - diagonal, cy - diagonal);
+        ctx.closePath();
+        ctx.stroke();
+
+        ctx.restore();
+
+        const shouldBranch =
+          depth > 1 &&
+          (proximity > 0.25 || flowFill > 0.05);
+        if (!shouldBranch) return;
+
+        const nextDepth = depth - 1;
+        const nextSize = size * 0.55;
+        const shift = size * 0.95;
+        const nextProximity = proximity * 0.86;
+        const nextTravel = travel + params.branchLag;
+
+        drawKolamMotif(cx + shift, cy, nextSize, nextDepth, nextProximity, nextTravel);
+        drawKolamMotif(cx - shift, cy, nextSize, nextDepth, nextProximity, nextTravel);
+        drawKolamMotif(cx, cy + shift, nextSize, nextDepth, nextProximity, nextTravel);
+        drawKolamMotif(cx, cy - shift, nextSize, nextDepth, nextProximity, nextTravel);
+      }
+
+      function updateMaskPosition(event) {
+        const x = (event.clientX / window.innerWidth) * 100;
+        const y = (event.clientY / window.innerHeight) * 100;
+        root.style.setProperty("--cursor-x", `${x}%`);
+        root.style.setProperty("--cursor-y", `${y}%`);
+        pointer.targetX = event.clientX;
+        pointer.targetY = event.clientY;
+      }
+
+      function handleLeave() {
+        root.style.setProperty("--cursor-x", "50%");
+        root.style.setProperty("--cursor-y", "40%");
+        pointer.targetX = viewport.width * 0.5;
+        pointer.targetY = viewport.height * 0.4;
+      }
+
+      function animate(time) {
+        drawKolam(time);
+        animationFrame = requestAnimationFrame(animate);
+      }
+
+      window.addEventListener("resize", resizeCanvas, { passive: true });
+      window.addEventListener("mousemove", updateMaskPosition, { passive: true });
+      window.addEventListener("touchmove", (event) => {
+        if (event.touches && event.touches[0]) {
+          updateMaskPosition(event.touches[0]);
+        }
+      }, { passive: true });
+      window.addEventListener("mouseleave", handleLeave);
+      resizeCanvas();
+      animate();
+    </script>
+  </body>
+</html>
+
