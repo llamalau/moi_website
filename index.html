@@ -133,23 +133,21 @@
       const root = document.documentElement;
 
       const params = {
-        spacing: 140,
+        spacing: 120,
         maxDepth: 3,
-        influenceScale: 2.1,
-        flowSpeed: 0.26,
-        fluidVolume: 0.32,
-        depthLag: 0.18,
-        branchLag: 0.24,
-        basePipe: 1.5,
-        pipeTaper: 0.68,
-        flickerAmp: 0.08,
+        influenceScale: 2.15,
+        fluidLength: 0.4,
+        depthLag: 0.25,
+        branchLag: 0.35,
+        basePipe: 1.6,
+        pipeTaper: 0.7,
+        ambientPipe: 0.16,
+        sinkLag: 0.12,
+        flowSettle: 0.28,
       };
       const glowColor = (alpha) => `rgba(198, 255, 211, ${alpha})`;
       const emberColor = (alpha) => `rgba(86, 176, 129, ${alpha})`;
       const clamp01 = (value) => Math.min(1, Math.max(0, value));
-      const fract = (value) => (value % 1 + 1) % 1;
-      const hash2d = (x, y) =>
-        fract(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453);
 
       const viewport = { width: window.innerWidth, height: window.innerHeight };
       const pointer = {
@@ -159,14 +157,12 @@
         targetY: viewport.height * 0.4,
       };
       let animationFrame;
-      let currentSeconds = 0;
+      const sink = { x: pointer.currentX, y: pointer.currentY };
+      const fluidLevels = new Map();
 
-      function computeFlow(travel) {
-        const cyclePos = fract(currentSeconds * params.flowSpeed - travel);
-        if (cyclePos < 0) return 0;
-        if (cyclePos > params.fluidVolume) return 0;
-        const normalized = 1 - cyclePos / params.fluidVolume;
-        return normalized * normalized;
+      function computeFlow(pathLength) {
+        const fill = clamp01(1 - pathLength / params.fluidLength);
+        return fill * fill;
       }
 
       function resizeCanvas() {
@@ -181,10 +177,12 @@
         ctx.scale(ratio, ratio);
         pointer.currentX = pointer.targetX = viewport.width * 0.5;
         pointer.currentY = pointer.targetY = viewport.height * 0.4;
+        sink.x = pointer.currentX;
+        sink.y = pointer.currentY;
+        fluidLevels.clear();
       }
 
       function drawKolam(time = 0) {
-        currentSeconds = time * 0.001;
         ctx.clearRect(0, 0, viewport.width, viewport.height);
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
@@ -194,6 +192,9 @@
         const offset = params.spacing / 2;
         pointer.currentX += (pointer.targetX - pointer.currentX) * 0.1;
         pointer.currentY += (pointer.targetY - pointer.currentY) * 0.1;
+        sink.x += (pointer.currentX - sink.x) * params.sinkLag;
+        sink.y += (pointer.currentY - sink.y) * params.sinkLag;
+
         const influence = params.spacing * params.influenceScale;
 
         for (let y = -offset; y <= viewport.height + offset; y += params.spacing) {
@@ -201,7 +202,8 @@
             const dist = Math.hypot(x - pointer.currentX, y - pointer.currentY);
             if (dist > influence) continue;
             const proximity = Math.max(0, 1 - dist / influence);
-            const travel = dist / params.spacing;
+            const travel =
+              (Math.abs(sink.x - x) + Math.abs(sink.y - y)) / params.spacing;
 
             drawKolamMotif(
               x,
@@ -221,65 +223,105 @@
 
         const depthIndex = params.maxDepth - depth;
         const localTravel = travel + depthIndex * params.depthLag;
-        const flowFill = computeFlow(localTravel);
+
+        const key = `${cx}|${cy}|${depth}`;
+        const targetFill = computeFlow(localTravel);
+        const previousFill = fluidLevels.get(key) ?? 0;
+        const flowFill =
+          previousFill + (targetFill - previousFill) * params.flowSettle;
+        fluidLevels.set(key, flowFill);
+
         const pipeDiameter = params.basePipe * Math.pow(params.pipeTaper, depthIndex);
-        const baseEnergy = clamp01(flowFill * 0.9 + proximity * 0.35);
-
-        const flickerSeed = hash2d(cx * 0.21, cy * 0.13 + depthIndex * 7.1);
-        const flickerWave =
-          Math.sin(currentSeconds * (1.2 + flickerSeed * 0.8) + flickerSeed * 11.7) * 0.5 + 0.5;
-        const microFlicker =
-          depth === 1 ? 1 + (flickerWave - 0.5) * params.flickerAmp : 1;
-
-        const energy = baseEnergy * microFlicker;
+        const rotation = depthIndex % 2 === 0 ? 0 : Math.PI / 4;
 
         ctx.save();
-        ctx.globalAlpha *= 0.4 + proximity * 0.35 + energy * 0.4;
-        ctx.lineWidth = pipeDiameter * (0.85 + energy * 1.45);
-        ctx.shadowBlur = 5 + energy * 26;
-        ctx.shadowOffsetX = (pointer.currentX - cx) * 0.01 * energy;
-        ctx.shadowOffsetY = (pointer.currentY - cy) * 0.01 * energy;
-        ctx.shadowColor = emberColor(0.12 + energy * 0.6);
-        ctx.strokeStyle = glowColor(0.08 + energy * 0.82);
-
-        const curve = size * (0.72 + proximity * 0.2);
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - size);
-        ctx.bezierCurveTo(cx + curve * 0.5, cy - size, cx + curve, cy - curve * 0.35, cx + curve, cy);
-        ctx.bezierCurveTo(cx + curve, cy + curve * 0.35, cx + curve * 0.5, cy + size, cx, cy + size);
-        ctx.bezierCurveTo(cx - curve * 0.5, cy + size, cx - curve, cy + curve * 0.35, cx - curve, cy);
-        ctx.bezierCurveTo(cx - curve, cy - curve * 0.35, cx - curve * 0.5, cy - size, cx, cy - size);
-        ctx.closePath();
-        ctx.stroke();
-
-        const diagonal = size * (0.65 + proximity * 0.25);
-        const arcReach = size * (1.05 + proximity * 0.25);
-        ctx.beginPath();
-        ctx.moveTo(cx - diagonal, cy - diagonal);
-        ctx.quadraticCurveTo(cx, cy - arcReach, cx + diagonal, cy - diagonal);
-        ctx.quadraticCurveTo(cx + arcReach, cy, cx + diagonal, cy + diagonal);
-        ctx.quadraticCurveTo(cx, cy + arcReach, cx - diagonal, cy + diagonal);
-        ctx.quadraticCurveTo(cx - arcReach, cy, cx - diagonal, cy - diagonal);
-        ctx.closePath();
-        ctx.stroke();
-
+        ctx.globalAlpha *= params.ambientPipe + proximity * 0.1;
+        ctx.lineWidth = pipeDiameter * 0.55;
+        ctx.strokeStyle = "rgba(28, 58, 45, 0.45)";
+        ctx.shadowBlur = 0;
+        renderSquarePipes(cx, cy, size, rotation, true);
         ctx.restore();
 
-        const shouldBranch =
-          depth > 1 &&
-          (proximity > 0.25 || flowFill > 0.05);
-        if (!shouldBranch) return;
+        if (flowFill <= 0.002) return;
+
+        const energy = flowFill;
+
+        ctx.save();
+        ctx.globalAlpha *= 0.45 + energy * 0.5;
+        ctx.lineWidth = pipeDiameter * (1.1 + energy * 1.2);
+        ctx.shadowBlur = 12 + energy * 30;
+        ctx.shadowOffsetX = (pointer.currentX - cx) * 0.006 * energy;
+        ctx.shadowOffsetY = (pointer.currentY - cy) * 0.006 * energy;
+        ctx.shadowColor = glowColor(0.35 + energy * 0.4);
+        ctx.strokeStyle = glowColor(0.55 + energy * 0.45);
+        renderSquarePipes(cx, cy, size, rotation, false);
+        ctx.restore();
+
+        if (depth <= 1) return;
+        if (energy < 0.05) return;
 
         const nextDepth = depth - 1;
-        const nextSize = size * 0.55;
-        const shift = size * 0.95;
-        const nextProximity = proximity * 0.86;
+        const nextSize = size * 0.62;
+        const spread = size * 1.45;
+        const nextProximity = proximity * 0.92;
         const nextTravel = travel + params.branchLag;
 
-        drawKolamMotif(cx + shift, cy, nextSize, nextDepth, nextProximity, nextTravel);
-        drawKolamMotif(cx - shift, cy, nextSize, nextDepth, nextProximity, nextTravel);
-        drawKolamMotif(cx, cy + shift, nextSize, nextDepth, nextProximity, nextTravel);
-        drawKolamMotif(cx, cy - shift, nextSize, nextDepth, nextProximity, nextTravel);
+        drawKolamMotif(cx + spread, cy, nextSize, nextDepth, nextProximity, nextTravel);
+        drawKolamMotif(cx - spread, cy, nextSize, nextDepth, nextProximity, nextTravel);
+        drawKolamMotif(cx, cy + spread, nextSize, nextDepth, nextProximity, nextTravel);
+        drawKolamMotif(cx, cy - spread, nextSize, nextDepth, nextProximity, nextTravel);
+      }
+
+      function renderSquarePipes(cx, cy, size, rotation, includeGirders) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rotation);
+        const half = size;
+        const inner = size * 0.6;
+        const spokes = size * 1.15;
+
+        ctx.beginPath();
+        ctx.rect(-half, -half, half * 2, half * 2);
+        ctx.rect(-inner, -inner, inner * 2, inner * 2);
+        ctx.stroke();
+
+        if (includeGirders) {
+          ctx.beginPath();
+          ctx.moveTo(-spokes, 0);
+          ctx.lineTo(spokes, 0);
+          ctx.moveTo(0, -spokes);
+          ctx.lineTo(0, spokes);
+          ctx.moveTo(-half, -half);
+          ctx.lineTo(-spokes, -spokes);
+          ctx.moveTo(half, -half);
+          ctx.lineTo(spokes, -spokes);
+          ctx.moveTo(half, half);
+          ctx.lineTo(spokes, spokes);
+          ctx.moveTo(-half, half);
+          ctx.lineTo(-spokes, spokes);
+          ctx.stroke();
+        } else {
+          const diagonals = inner * 0.9;
+          ctx.beginPath();
+          ctx.moveTo(-inner, 0);
+          ctx.lineTo(-spokes, 0);
+          ctx.moveTo(inner, 0);
+          ctx.lineTo(spokes, 0);
+          ctx.moveTo(0, -inner);
+          ctx.lineTo(0, -spokes);
+          ctx.moveTo(0, inner);
+          ctx.lineTo(0, spokes);
+          ctx.moveTo(-inner, -inner);
+          ctx.lineTo(-diagonals, -diagonals);
+          ctx.moveTo(inner, -inner);
+          ctx.lineTo(diagonals, -diagonals);
+          ctx.moveTo(inner, inner);
+          ctx.lineTo(diagonals, diagonals);
+          ctx.moveTo(-inner, inner);
+          ctx.lineTo(-diagonals, diagonals);
+          ctx.stroke();
+        }
+        ctx.restore();
       }
 
       function updateMaskPosition(event) {
