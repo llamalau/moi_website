@@ -132,23 +132,6 @@
       const ctx = canvas.getContext("2d");
       const root = document.documentElement;
 
-      const params = {
-        spacing: 120,
-        maxDepth: 3,
-        influenceScale: 2.15,
-        fluidLength: 0.4,
-        depthLag: 0.25,
-        branchLag: 0.35,
-        basePipe: 1.6,
-        pipeTaper: 0.7,
-        ambientPipe: 0.16,
-        sinkLag: 0.12,
-        flowSettle: 0.28,
-      };
-      const glowColor = (alpha) => `rgba(198, 255, 211, ${alpha})`;
-      const emberColor = (alpha) => `rgba(86, 176, 129, ${alpha})`;
-      const clamp01 = (value) => Math.min(1, Math.max(0, value));
-
       const viewport = { width: window.innerWidth, height: window.innerHeight };
       const pointer = {
         currentX: viewport.width * 0.5,
@@ -157,12 +140,47 @@
         targetY: viewport.height * 0.4,
       };
       let animationFrame;
-      const sink = { x: pointer.currentX, y: pointer.currentY };
-      const fluidLevels = new Map();
 
-      function computeFlow(pathLength) {
-        const fill = clamp01(1 - pathLength / params.fluidLength);
-        return fill * fill;
+      const julia = {
+        sampleScale: 0.38,
+        maxIterations: 90,
+        escapeRadius: 4,
+        baseConstant: { re: -0.78, im: 0.145 },
+        pointerInfluence: 0.12,
+        timeInfluence: 0.1,
+        animationSpeed: 0.00012,
+        gravityStrength: 0.92,
+        gravitySoftening: 0.015,
+        gravitySteps: 3,
+        gravityDamping: 0.18,
+        paletteSize: 96,
+        renderInterval: 55,
+      };
+
+      const buffer = document.createElement("canvas");
+      const bufferCtx = buffer.getContext("2d", { willReadFrequently: true });
+      bufferCtx.imageSmoothingEnabled = true;
+      bufferCtx.imageSmoothingQuality = "medium";
+
+      const palette = buildPalette(julia.paletteSize);
+      let bufferData = null;
+      let lastRenderTime = 0;
+
+      function clamp01(value) {
+        return Math.min(1, Math.max(0, value));
+      }
+
+      function buildPalette(size) {
+        const gradient = [];
+        for (let i = 0; i < size; i++) {
+          const t = i / (size - 1 || 1);
+          const eased = t * t * (3 - 2 * t);
+          const r = Math.round(10 + 18 * eased);
+          const g = Math.round(78 + 142 * eased);
+          const b = Math.round(36 + 22 * (1 - eased));
+          gradient.push([r, g, b]);
+        }
+        return gradient;
       }
 
       function resizeCanvas() {
@@ -175,153 +193,142 @@
         canvas.style.height = viewport.height + "px";
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(ratio, ratio);
+
         pointer.currentX = pointer.targetX = viewport.width * 0.5;
         pointer.currentY = pointer.targetY = viewport.height * 0.4;
-        sink.x = pointer.currentX;
-        sink.y = pointer.currentY;
-        fluidLevels.clear();
+
+        buffer.width = Math.max(1, Math.round(viewport.width * julia.sampleScale));
+        buffer.height = Math.max(1, Math.round(viewport.height * julia.sampleScale));
+        bufferData = bufferCtx.createImageData(buffer.width, buffer.height);
+
+        renderJuliaField();
       }
 
-      function drawKolam(time = 0) {
-        ctx.clearRect(0, 0, viewport.width, viewport.height);
-        ctx.save();
-        ctx.globalCompositeOperation = "lighter";
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
+      function renderJuliaField(time = 0) {
+        if (!bufferData) return;
+        const { width, height, data } = bufferData;
+        const aspect = viewport.width / Math.max(1, viewport.height);
+        const zoom = 1.5;
+        const xMin = -zoom * aspect;
+        const xMax = zoom * aspect;
+        const yMin = -zoom;
+        const yMax = zoom;
 
-        const offset = params.spacing / 2;
-        pointer.currentX += (pointer.targetX - pointer.currentX) * 0.1;
-        pointer.currentY += (pointer.targetY - pointer.currentY) * 0.1;
-        sink.x += (pointer.currentX - sink.x) * params.sinkLag;
-        sink.y += (pointer.currentY - sink.y) * params.sinkLag;
+        const pointerRatioX = pointer.currentX / Math.max(1, viewport.width);
+        const pointerRatioY = pointer.currentY / Math.max(1, viewport.height);
 
-        const influence = params.spacing * params.influenceScale;
+        const cRe =
+          julia.baseConstant.re +
+          (pointerRatioX - 0.5) * julia.pointerInfluence +
+          Math.cos(time * julia.animationSpeed) * julia.timeInfluence;
+        const cIm =
+          julia.baseConstant.im +
+          (pointerRatioY - 0.5) * julia.pointerInfluence +
+          Math.sin(time * julia.animationSpeed) * julia.timeInfluence;
 
-        for (let y = -offset; y <= viewport.height + offset; y += params.spacing) {
-          for (let x = -offset; x <= viewport.width + offset; x += params.spacing) {
-            const dist = Math.hypot(x - pointer.currentX, y - pointer.currentY);
-            if (dist > influence) continue;
-            const proximity = Math.max(0, 1 - dist / influence);
-            const travel =
-              (Math.abs(sink.x - x) + Math.abs(sink.y - y)) / params.spacing;
+        const pointerPlaneX = xMin + pointerRatioX * (xMax - xMin);
+        const pointerPlaneY = yMin + pointerRatioY * (yMax - yMin);
 
-            drawKolamMotif(
-              x,
-              y,
-              params.spacing * 0.42,
-              params.maxDepth,
-              proximity,
-              travel
-            );
+        function applyGravityWarp(x, y) {
+          let px = x;
+          let py = y;
+          let vx = 0;
+          let vy = 0;
+
+          for (let step = 0; step < julia.gravitySteps; step++) {
+            const dx = pointerPlaneX - px;
+            const dy = pointerPlaneY - py;
+            const distSq = dx * dx + dy * dy + julia.gravitySoftening;
+            const invDist = 1 / Math.sqrt(distSq);
+            const normDx = dx * invDist;
+            const normDy = dy * invDist;
+            const accel = julia.gravityStrength * invDist * invDist;
+
+            vx = (vx + normDx * accel) * (1 - julia.gravityDamping);
+            vy = (vy + normDy * accel) * (1 - julia.gravityDamping);
+
+            px += vx;
+            py += vy;
+          }
+
+          return { x: px, y: py };
+        }
+
+        const maxIter = julia.maxIterations;
+        const escape = julia.escapeRadius;
+
+        for (let y = 0; y < height; y++) {
+          const cy = yMin + (y / (height - 1 || 1)) * (yMax - yMin);
+          for (let x = 0; x < width; x++) {
+            const baseCx = xMin + (x / (width - 1 || 1)) * (xMax - xMin);
+
+            const warped = applyGravityWarp(baseCx, cy);
+
+            let zx = warped.x;
+            let zy = warped.y;
+            let iter = 0;
+            let mag = 0;
+
+            while (iter < maxIter && (mag = zx * zx + zy * zy) <= escape) {
+              const xtemp = zx * zx - zy * zy + cRe;
+              zy = 2 * zx * zy + cIm;
+              zx = xtemp;
+              iter++;
+            }
+
+            const idx = (y * width + x) * 4;
+
+            if (iter === maxIter) {
+              data[idx] = 0;
+              data[idx + 1] = 0;
+              data[idx + 2] = 0;
+              data[idx + 3] = 0;
+            } else {
+              const smooth =
+                iter +
+                1 -
+                Math.log2(Math.log2(Math.max(mag, 1.000001)));
+              const t = clamp01(smooth / maxIter);
+              const band = Math.abs(t - 0.45);
+              const edge = Math.exp(-Math.pow(band / 0.11, 2));
+              const alpha = Math.round(255 * Math.pow(edge, 1.2));
+
+              if (alpha < 12) {
+                data[idx] = 0;
+                data[idx + 1] = 0;
+                data[idx + 2] = 0;
+                data[idx + 3] = 0;
+                continue;
+              }
+
+              const colorIndex = Math.min(
+                palette.length - 1,
+                Math.floor(t * (palette.length - 1))
+              );
+              const [r, g, b] = palette[colorIndex];
+              data[idx] = r;
+              data[idx + 1] = g;
+              data[idx + 2] = b;
+              data[idx + 3] = alpha;
+            }
           }
         }
-        ctx.restore();
+
+        bufferCtx.putImageData(bufferData, 0, 0);
+        ctx.clearRect(0, 0, viewport.width, viewport.height);
+        ctx.drawImage(buffer, 0, 0, viewport.width, viewport.height);
       }
 
-      function drawKolamMotif(cx, cy, size, depth, proximity, travel) {
-        if (size < 6 || depth === 0) return;
+      function animate(time = 0) {
+        pointer.currentX += (pointer.targetX - pointer.currentX) * 0.08;
+        pointer.currentY += (pointer.targetY - pointer.currentY) * 0.08;
 
-        const depthIndex = params.maxDepth - depth;
-        const localTravel = travel + depthIndex * params.depthLag;
-
-        const key = `${cx}|${cy}|${depth}`;
-        const targetFill = computeFlow(localTravel);
-        const previousFill = fluidLevels.get(key) ?? 0;
-        const flowFill =
-          previousFill + (targetFill - previousFill) * params.flowSettle;
-        fluidLevels.set(key, flowFill);
-
-        const pipeDiameter = params.basePipe * Math.pow(params.pipeTaper, depthIndex);
-        const rotation = depthIndex % 2 === 0 ? 0 : Math.PI / 4;
-
-        ctx.save();
-        ctx.globalAlpha *= params.ambientPipe + proximity * 0.1;
-        ctx.lineWidth = pipeDiameter * 0.55;
-        ctx.strokeStyle = "rgba(28, 58, 45, 0.45)";
-        ctx.shadowBlur = 0;
-        renderSquarePipes(cx, cy, size, rotation, true);
-        ctx.restore();
-
-        if (flowFill <= 0.002) return;
-
-        const energy = flowFill;
-
-        ctx.save();
-        ctx.globalAlpha *= 0.45 + energy * 0.5;
-        ctx.lineWidth = pipeDiameter * (1.1 + energy * 1.2);
-        ctx.shadowBlur = 12 + energy * 30;
-        ctx.shadowOffsetX = (pointer.currentX - cx) * 0.006 * energy;
-        ctx.shadowOffsetY = (pointer.currentY - cy) * 0.006 * energy;
-        ctx.shadowColor = glowColor(0.35 + energy * 0.4);
-        ctx.strokeStyle = glowColor(0.55 + energy * 0.45);
-        renderSquarePipes(cx, cy, size, rotation, false);
-        ctx.restore();
-
-        if (depth <= 1) return;
-        if (energy < 0.05) return;
-
-        const nextDepth = depth - 1;
-        const nextSize = size * 0.62;
-        const spread = size * 1.45;
-        const nextProximity = proximity * 0.92;
-        const nextTravel = travel + params.branchLag;
-
-        drawKolamMotif(cx + spread, cy, nextSize, nextDepth, nextProximity, nextTravel);
-        drawKolamMotif(cx - spread, cy, nextSize, nextDepth, nextProximity, nextTravel);
-        drawKolamMotif(cx, cy + spread, nextSize, nextDepth, nextProximity, nextTravel);
-        drawKolamMotif(cx, cy - spread, nextSize, nextDepth, nextProximity, nextTravel);
-      }
-
-      function renderSquarePipes(cx, cy, size, rotation, includeGirders) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(rotation);
-        const half = size;
-        const inner = size * 0.6;
-        const spokes = size * 1.15;
-
-        ctx.beginPath();
-        ctx.rect(-half, -half, half * 2, half * 2);
-        ctx.rect(-inner, -inner, inner * 2, inner * 2);
-        ctx.stroke();
-
-        if (includeGirders) {
-          ctx.beginPath();
-          ctx.moveTo(-spokes, 0);
-          ctx.lineTo(spokes, 0);
-          ctx.moveTo(0, -spokes);
-          ctx.lineTo(0, spokes);
-          ctx.moveTo(-half, -half);
-          ctx.lineTo(-spokes, -spokes);
-          ctx.moveTo(half, -half);
-          ctx.lineTo(spokes, -spokes);
-          ctx.moveTo(half, half);
-          ctx.lineTo(spokes, spokes);
-          ctx.moveTo(-half, half);
-          ctx.lineTo(-spokes, spokes);
-          ctx.stroke();
-        } else {
-          const diagonals = inner * 0.9;
-          ctx.beginPath();
-          ctx.moveTo(-inner, 0);
-          ctx.lineTo(-spokes, 0);
-          ctx.moveTo(inner, 0);
-          ctx.lineTo(spokes, 0);
-          ctx.moveTo(0, -inner);
-          ctx.lineTo(0, -spokes);
-          ctx.moveTo(0, inner);
-          ctx.lineTo(0, spokes);
-          ctx.moveTo(-inner, -inner);
-          ctx.lineTo(-diagonals, -diagonals);
-          ctx.moveTo(inner, -inner);
-          ctx.lineTo(diagonals, -diagonals);
-          ctx.moveTo(inner, inner);
-          ctx.lineTo(diagonals, diagonals);
-          ctx.moveTo(-inner, inner);
-          ctx.lineTo(-diagonals, diagonals);
-          ctx.stroke();
+        if (time - lastRenderTime > julia.renderInterval) {
+          renderJuliaField(time);
+          lastRenderTime = time;
         }
-        ctx.restore();
+
+        animationFrame = requestAnimationFrame(animate);
       }
 
       function updateMaskPosition(event) {
@@ -338,11 +345,6 @@
         root.style.setProperty("--cursor-y", "40%");
         pointer.targetX = viewport.width * 0.5;
         pointer.targetY = viewport.height * 0.4;
-      }
-
-      function animate(time) {
-        drawKolam(time);
-        animationFrame = requestAnimationFrame(animate);
       }
 
       window.addEventListener("resize", resizeCanvas, { passive: true });
