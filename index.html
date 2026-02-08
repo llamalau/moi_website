@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Lauhitya Reddy — Research Notes</title>
+    <title>Lauhitya Reddy</title>
     <style>
       :root {
         color-scheme: light;
@@ -72,23 +72,79 @@
         margin: 0 0 1rem;
       }
 
-      section textarea {
-        width: 100%;
-        min-height: 180px;
-        border: 1px solid rgba(36, 78, 57, 0.2);
-        border-radius: 16px;
-        padding: 1.2rem;
-        font-size: 1rem;
-        font-family: inherit;
-        background: rgba(255, 255, 255, 0.9);
-        color: var(--text);
-        resize: vertical;
-        transition: border-color 0.2s ease;
+      section + section {
+        margin-top: clamp(1.5rem, 3vw, 2.5rem);
       }
 
-      section textarea:focus {
-        outline: none;
-        border-color: rgba(55, 100, 76, 0.6);
+      .contact-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem 1.4rem;
+        margin-top: 0.6rem;
+      }
+
+      .contact-links a {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: opacity 0.2s;
+      }
+
+      .contact-links a:hover {
+        opacity: 0.7;
+      }
+
+      .entry {
+        margin-bottom: 1.2rem;
+      }
+
+      .entry:last-child {
+        margin-bottom: 0;
+      }
+
+      .entry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 0 1rem;
+      }
+
+      .entry-header h3 {
+        font-size: 0.95rem;
+        margin: 0;
+        color: var(--text);
+      }
+
+      .entry-header .date {
+        font-size: 0.85rem;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .entry-role {
+        font-size: 0.88rem;
+        color: var(--muted);
+        font-style: italic;
+        margin: 0.15rem 0 0;
+      }
+
+      .entry ul {
+        margin: 0.4rem 0 0;
+        padding-left: 1.2rem;
+      }
+
+      .entry li {
+        font-size: 0.88rem;
+        line-height: 1.5;
+        color: var(--text);
+        margin-bottom: 0.3rem;
+      }
+
+      section p {
+        font-size: 0.92rem;
+        margin: 0;
+        line-height: 1.6;
       }
 
       canvas {
@@ -97,11 +153,11 @@
         width: 100%;
         height: 100%;
         z-index: 0;
-        opacity: 0.78;
+        opacity: 0.88;
         pointer-events: none;
         filter: brightness(1.05) saturate(0.9);
-        -webkit-mask-image: radial-gradient(circle at var(--cursor-x) var(--cursor-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 18%, rgba(0, 0, 0, 0.35) 26%, rgba(0, 0, 0, 0) 32%);
-        mask-image: radial-gradient(circle at var(--cursor-x) var(--cursor-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 18%, rgba(0, 0, 0, 0.35) 26%, rgba(0, 0, 0, 0) 32%);
+        -webkit-mask-image: radial-gradient(circle at var(--cursor-x) var(--cursor-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 22%, rgba(0, 0, 0, 0.35) 32%, rgba(0, 0, 0, 0) 40%);
+        mask-image: radial-gradient(circle at var(--cursor-x) var(--cursor-y), rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 22%, rgba(0, 0, 0, 0.35) 32%, rgba(0, 0, 0, 0) 40%);
       }
 
       @media (pointer: coarse) {
@@ -117,13 +173,83 @@
     <canvas id="kolam" aria-hidden="true"></canvas>
     <main class="layout">
       <header>
-        <p>Personal Research Notebook</p>
+        <p>Biomedical Informatics PhD Student</p>
         <h1>Lauhitya Reddy</h1>
+        <div class="contact-links">
+          <a href="mailto:lauhitya.arvind@gmail.com">lauhitya.arvind@gmail.com</a>
+          <a href="https://linkedin.com/in/lauhitya-aravind/" target="_blank">LinkedIn</a>
+        </div>
       </header>
 
-      <section aria-label="Intro slot">
-        <h2>Intro</h2>
-        <textarea placeholder="Write your intro here..."></textarea>
+      <section aria-label="About">
+        <h2>About</h2>
+        <p>PhD student in Biomedical Informatics at Emory University, working at the ViTAL Lab on explainable AI for clinical gait analysis. My research uses markerless pose estimation from mobile phone videos to classify gait impairments while preserving patient privacy. Previously earned an MS in Biomedical Engineering from Georgia Tech and a BE in Biotechnology from RVCE, Bengaluru.</p>
+      </section>
+
+      <section aria-label="Research">
+        <h2>Research</h2>
+        <div class="entry">
+          <div class="entry-header">
+            <h3>ViTAL Lab, Emory University</h3>
+            <span class="date">Jan 2024 -- Present</span>
+          </div>
+          <p class="entry-role">PhD Student / Research Assistant</p>
+          <ul>
+            <li>First-author paper on classifying simulated gait impairments using privacy-preserving explainable AI and mobile phone videos, accepted in PLOS Digital Health.</li>
+            <li>First-author abstract on integrating clinician insights into markerless gait analysis, selected among 50 of 10,000 for the Society for Neuroscience 2025 press conference.</li>
+            <li>Second-author poster analyzing the backward tango step in Parkinson's disease patients received the Best Poster Award at Georgia Tech's STAR-AI Symposium.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section aria-label="Experience">
+        <h2>Experience</h2>
+        <div class="entry">
+          <div class="entry-header">
+            <h3>Strand Lifesciences</h3>
+            <span class="date">Jan -- Jul 2023</span>
+          </div>
+          <p class="entry-role">Bioinformatics Intern, Bengaluru</p>
+          <ul>
+            <li>Mentored by CTO Dr. Shanmukh Katragadda and CSO Dr. Vamsi Veeramachaneni.</li>
+            <li>Designed a Whole Exome Sequencing panel; benchmarked against competitor datasets using Python and R.</li>
+          </ul>
+        </div>
+        <div class="entry">
+          <div class="entry-header">
+            <h3>4baseCare Oncosolutions</h3>
+            <span class="date">Apr -- Oct 2021</span>
+          </div>
+          <p class="entry-role">Bioinformatics Intern, Bengaluru</p>
+          <ul>
+            <li>Built an automated metagenomic analysis pipeline, eliminating 70% of terminal interactions and reducing 98% of troubleshooting requests.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section aria-label="Education">
+        <h2>Education</h2>
+        <div class="entry">
+          <div class="entry-header">
+            <h3>Emory University</h3>
+            <span class="date">Aug 2025</span>
+          </div>
+          <p class="entry-role">PhD in Biomedical Informatics</p>
+        </div>
+        <div class="entry">
+          <div class="entry-header">
+            <h3>Georgia Institute of Technology</h3>
+            <span class="date">Dec 2024</span>
+          </div>
+          <p class="entry-role">MS in Biomedical Engineering</p>
+        </div>
+        <div class="entry">
+          <div class="entry-header">
+            <h3>RV College of Engineering</h3>
+            <span class="date">Jul 2023</span>
+          </div>
+          <p class="entry-role">BE in Biotechnology</p>
+        </div>
       </section>
     </main>
 
@@ -138,199 +264,715 @@
         currentY: viewport.height * 0.4,
         targetX: viewport.width * 0.5,
         targetY: viewport.height * 0.4,
+        prevX: viewport.width * 0.5,
+        prevY: viewport.height * 0.4,
+        speed: 0,
       };
+      let pointerIdleTicks = 0;
+      const POINTER_IDLE_THRESHOLD = 40;   // ticks of no movement before fireflies perch
+      const FIREFLY_FAR_THRESHOLD = 500;   // distance beyond which fireflies perch
+
+      /* ── Two-layer rendering ── */
+      const barkCanvas = document.createElement("canvas");
+      const barkCtx = barkCanvas.getContext("2d");
+
+      /* ── Simulation state ── */
+      const SEGMENT_CAP = 20000;
+      const TIP_CAP = 80;
+      const GROWTH_HZ = 20;
+      const BRANCH_SPACING = 25;
+      const BRANCH_ANGLE = 37 * (Math.PI / 180);
+      const PREGROW_TICKS = 25;
+      const ZAP_RADIUS = 28;
+
+      let tips = [];
+      let segments = [];
+      let fallingBugs = [];
+      let sparks = [];
+      let fossilIndex = 0;
+      let tick = 0;
+      let renderTick = 0;
+      let growInterval = null;
       let animationFrame;
+      let dpr = 1;
+      let lastBarkRefreshTick = 0;
+      const BARK_REFRESH_INTERVAL = 60;
 
-      const julia = {
-        sampleScale: 0.38,
-        maxIterations: 90,
-        escapeRadius: 4,
-        baseConstant: { re: -0.78, im: 0.145 },
-        pointerInfluence: 0.12,
-        timeInfluence: 0.1,
-        animationSpeed: 0.00012,
-        gravityStrength: 0.92,
-        gravitySoftening: 0.015,
-        gravitySteps: 3,
-        gravityDamping: 0.18,
-        paletteSize: 96,
-        renderInterval: 55,
-      };
+      /* ── Obstacle / leaf / perch state ── */
+      const OBSTACLE_PADDING = 8;
+      let leaves = [];
+      const LEAF_CAP = 200;
+      const LEAF_SPAWN_INTERVAL = 8;
 
-      const buffer = document.createElement("canvas");
-      const bufferCtx = buffer.getContext("2d", { willReadFrequently: true });
-      bufferCtx.imageSmoothingEnabled = true;
-      bufferCtx.imageSmoothingQuality = "medium";
+      /* ── Pixel-based collision mask ── */
+      const textMaskCanvas = document.createElement("canvas");
+      const textMaskCtx = textMaskCanvas.getContext("2d", { willReadFrequently: true });
+      let textMaskData = null;
+      let maskW = 0, maskH = 0;
 
-      const palette = buildPalette(julia.paletteSize);
-      let bufferData = null;
-      let lastRenderTime = 0;
+      /* ── Color helpers ── */
+      function segmentColor(birthTick, depth) {
+        const age = tick - birthTick;
+        const ageFactor = Math.min(1, age / 150);
+        const depthDim = Math.min(1, depth / 8);
 
-      function clamp01(value) {
-        return Math.min(1, Math.max(0, value));
+        // Vivid green → dark green → warm brown
+        const r = Math.round(30 + 110 * ageFactor + 15 * depthDim);
+        const g = Math.round(210 - 160 * ageFactor - 20 * depthDim);
+        const b = Math.round(30 - 10 * ageFactor);
+        return `rgb(${r},${g},${b})`;
       }
 
-      function buildPalette(size) {
-        const gradient = [];
-        for (let i = 0; i < size; i++) {
-          const t = i / (size - 1 || 1);
-          const eased = t * t * (3 - 2 * t);
-          const r = Math.round(10 + 18 * eased);
-          const g = Math.round(78 + 142 * eased);
-          const b = Math.round(36 + 22 * (1 - eased));
-          gradient.push([r, g, b]);
-        }
-        return gradient;
+      function segmentThickness(baseTh, birthTick) {
+        const age = tick - birthTick;
+        return baseTh + Math.min(2.5, age * 0.004);
       }
 
-      function resizeCanvas() {
-        viewport.width = window.innerWidth;
-        viewport.height = window.innerHeight;
-        const ratio = window.devicePixelRatio || 1;
-        canvas.width = viewport.width * ratio;
-        canvas.height = viewport.height * ratio;
-        canvas.style.width = viewport.width + "px";
-        canvas.style.height = viewport.height + "px";
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(ratio, ratio);
-
-        pointer.currentX = pointer.targetX = viewport.width * 0.5;
-        pointer.currentY = pointer.targetY = viewport.height * 0.4;
-
-        buffer.width = Math.max(1, Math.round(viewport.width * julia.sampleScale));
-        buffer.height = Math.max(1, Math.round(viewport.height * julia.sampleScale));
-        bufferData = bufferCtx.createImageData(buffer.width, buffer.height);
-
-        renderJuliaField();
-      }
-
-      function renderJuliaField(time = 0) {
-        if (!bufferData) return;
-        const { width, height, data } = bufferData;
-        const aspect = viewport.width / Math.max(1, viewport.height);
-        const zoom = 1.5;
-        const xMin = -zoom * aspect;
-        const xMax = zoom * aspect;
-        const yMin = -zoom;
-        const yMax = zoom;
-
-        const pointerRatioX = pointer.currentX / Math.max(1, viewport.width);
-        const pointerRatioY = pointer.currentY / Math.max(1, viewport.height);
-
-        const cRe =
-          julia.baseConstant.re +
-          (pointerRatioX - 0.5) * julia.pointerInfluence +
-          Math.cos(time * julia.animationSpeed) * julia.timeInfluence;
-        const cIm =
-          julia.baseConstant.im +
-          (pointerRatioY - 0.5) * julia.pointerInfluence +
-          Math.sin(time * julia.animationSpeed) * julia.timeInfluence;
-
-        const pointerPlaneX = xMin + pointerRatioX * (xMax - xMin);
-        const pointerPlaneY = yMin + pointerRatioY * (yMax - yMin);
-
-        function applyGravityWarp(x, y) {
-          let px = x;
-          let py = y;
-          let vx = 0;
-          let vy = 0;
-
-          for (let step = 0; step < julia.gravitySteps; step++) {
-            const dx = pointerPlaneX - px;
-            const dy = pointerPlaneY - py;
-            const distSq = dx * dx + dy * dy + julia.gravitySoftening;
-            const invDist = 1 / Math.sqrt(distSq);
-            const normDx = dx * invDist;
-            const normDy = dy * invDist;
-            const accel = julia.gravityStrength * invDist * invDist;
-
-            vx = (vx + normDx * accel) * (1 - julia.gravityDamping);
-            vy = (vy + normDy * accel) * (1 - julia.gravityDamping);
-
-            px += vx;
-            py += vy;
+      /* ── Obstacle helpers ── */
+      function splitTextToLetters() {
+        const h1 = document.querySelector("header h1");
+        if (h1.dataset.split) return;
+        const text = h1.textContent;
+        h1.textContent = "";
+        for (let i = 0; i < text.length; i++) {
+          if (text[i] === " ") {
+            h1.appendChild(document.createTextNode(" "));
+          } else {
+            const span = document.createElement("span");
+            span.className = "char-obstacle";
+            span.textContent = text[i];
+            span.style.display = "inline-block";
+            h1.appendChild(span);
           }
+        }
+        h1.dataset.split = "1";
+      }
 
-          return { x: px, y: py };
+      function updateTextMask() {
+        maskW = viewport.width;
+        maskH = viewport.height;
+        textMaskCanvas.width = maskW;
+        textMaskCanvas.height = maskH;
+        textMaskCtx.clearRect(0, 0, maskW, maskH);
+
+        const pad = OBSTACLE_PADDING;
+
+        // Render h1 characters as actual glyph shapes
+        const chars = document.querySelectorAll(".char-obstacle");
+        for (let i = 0; i < chars.length; i++) {
+          const ch = chars[i];
+          const rect = ch.getBoundingClientRect();
+          const style = getComputedStyle(ch);
+          textMaskCtx.font = style.font;
+          textMaskCtx.textBaseline = "top";
+          // Stroke for padding, then fill for solid shape
+          textMaskCtx.strokeStyle = "white";
+          textMaskCtx.lineWidth = pad * 2;
+          textMaskCtx.lineJoin = "round";
+          textMaskCtx.strokeText(ch.textContent, rect.left, rect.top);
+          textMaskCtx.fillStyle = "white";
+          textMaskCtx.fillText(ch.textContent, rect.left, rect.top);
         }
 
-        const maxIter = julia.maxIterations;
-        const escape = julia.escapeRadius;
+        // Header p as text shape
+        const headerP = document.querySelector("header p");
+        if (headerP) {
+          const rect = headerP.getBoundingClientRect();
+          const style = getComputedStyle(headerP);
+          textMaskCtx.font = style.font;
+          textMaskCtx.textBaseline = "top";
+          textMaskCtx.strokeStyle = "white";
+          textMaskCtx.lineWidth = pad * 2;
+          textMaskCtx.lineJoin = "round";
+          textMaskCtx.strokeText(headerP.textContent, rect.left, rect.top);
+          textMaskCtx.fillStyle = "white";
+          textMaskCtx.fillText(headerP.textContent, rect.left, rect.top);
+        }
 
-        for (let y = 0; y < height; y++) {
-          const cy = yMin + (y / (height - 1 || 1)) * (yMax - yMin);
-          for (let x = 0; x < width; x++) {
-            const baseCx = xMin + (x / (width - 1 || 1)) * (xMax - xMin);
+        // Sections as filled rounded rects
+        const sections = document.querySelectorAll("section");
+        for (let i = 0; i < sections.length; i++) {
+          const rect = sections[i].getBoundingClientRect();
+          textMaskCtx.fillStyle = "white";
+          textMaskCtx.beginPath();
+          textMaskCtx.roundRect(rect.left - pad, rect.top - pad,
+            rect.width + pad * 2, rect.height + pad * 2, 24);
+          textMaskCtx.fill();
+        }
 
-            const warped = applyGravityWarp(baseCx, cy);
+        textMaskData = textMaskCtx.getImageData(0, 0, maskW, maskH).data;
+      }
 
-            let zx = warped.x;
-            let zy = warped.y;
-            let iter = 0;
-            let mag = 0;
+      function checkMaskCollision(x, y) {
+        if (!textMaskData) return false;
+        const px = Math.round(x);
+        const py = Math.round(y);
+        if (px < 0 || px >= maskW || py < 0 || py >= maskH) return false;
+        return textMaskData[(py * maskW + px) * 4 + 3] > 0;
+      }
 
-            while (iter < maxIter && (mag = zx * zx + zy * zy) <= escape) {
-              const xtemp = zx * zx - zy * zy + cRe;
-              zy = 2 * zx * zy + cIm;
-              zx = xtemp;
-              iter++;
+      function computeSurfaceNormal(x, y) {
+        let gx = 0, gy = 0;
+        const r = 5;
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > r * r) continue;
+            const px = Math.round(x + dx);
+            const py = Math.round(y + dy);
+            if (px < 0 || px >= maskW || py < 0 || py >= maskH) continue;
+            if (textMaskData[(py * maskW + px) * 4 + 3] > 0) {
+              const d = Math.sqrt(d2);
+              gx -= dx / d;
+              gy -= dy / d;
+            }
+          }
+        }
+        const mag = Math.sqrt(gx * gx + gy * gy);
+        if (mag < 0.01) return { x: 0, y: -1 };
+        return { x: gx / mag, y: gy / mag };
+      }
+
+      function spawnLeaf(x, y, surfaceAngle) {
+        if (leaves.length >= LEAF_CAP) return;
+        leaves.push({
+          x: x,
+          y: y,
+          angle: surfaceAngle + (Math.random() - 0.5) * 0.6,
+          size: 3 + Math.random() * 5,
+          birth: tick,
+        });
+      }
+
+      function leafColor(birthTick) {
+        const age = tick - birthTick;
+        const ageFactor = Math.min(1, age / 300);
+        const r = Math.round(30 + 60 * ageFactor);
+        const g = Math.round(190 - 90 * ageFactor);
+        const b = Math.round(30 + 10 * ageFactor);
+        return `rgb(${r},${g},${b})`;
+      }
+
+      function checkPerchOpportunity(tip) {
+        // Check if there's a solid surface within 12px below the firefly
+        for (let dy = 2; dy <= 12; dy++) {
+          if (checkMaskCollision(tip.x, tip.y + dy)) {
+            return tip.y + dy - 2;
+          }
+        }
+        return null;
+      }
+
+      /* ── Seed spawning (left/right walls only) ── */
+      function spawnSeeds(count, forceX, forceY) {
+        const ct = Math.min(count, TIP_CAP - tips.length);
+        for (let i = 0; i < ct; i++) {
+          let x, y, angle;
+          if (forceX !== undefined) {
+            x = forceX;
+            y = forceY;
+            angle = x < viewport.width / 2
+              ? (Math.random() - 0.5) * 0.8
+              : Math.PI + (Math.random() - 0.5) * 0.8;
+          } else if (Math.random() < 0.5) {
+            x = 2;
+            y = viewport.height * (0.15 + Math.random() * 0.7);
+            angle = (Math.random() - 0.5) * 0.8;
+          } else {
+            x = viewport.width - 2;
+            y = viewport.height * (0.15 + Math.random() * 0.7);
+            angle = Math.PI + (Math.random() - 0.5) * 0.8;
+          }
+          tips.push({
+            x, y, angle,
+            energy: 1.0,
+            depth: 0,
+            phase: Math.random() * Math.PI * 2,
+            distSinceNode: 0,
+            zapImmunity: forceX !== undefined ? 100 : 40,
+            clinging: false,
+            clingingEdge: null,
+            clingingProgress: 0,
+            perchTimer: 0,
+            perchWingPhase: 0,
+          });
+        }
+      }
+
+      /* ── Growth tick ── */
+      function growTick() {
+        tick++;
+        const sunX = pointer.currentX;
+        const sunY = pointer.currentY;
+
+        // Track pointer movement speed
+        const pdx = pointer.currentX - pointer.prevX;
+        const pdy = pointer.currentY - pointer.prevY;
+        pointer.speed = Math.sqrt(pdx * pdx + pdy * pdy);
+        pointer.prevX = pointer.currentX;
+        pointer.prevY = pointer.currentY;
+        if (pointer.speed < 0.5) {
+          pointerIdleTicks++;
+        } else {
+          pointerIdleTicks = 0;
+        }
+        const pointerIdle = pointerIdleTicks >= POINTER_IDLE_THRESHOLD;
+
+        const nextTips = [];
+        const newBranches = [];
+
+        // Count fireflies and perched fireflies for herd perching
+        let totalFireflies = 0;
+        let perchedFireflies = 0;
+        for (let i = 0; i < tips.length; i++) {
+          if (tips[i].zapImmunity <= 0) {
+            totalFireflies++;
+            if (tips[i].perchTimer > 0) perchedFireflies++;
+          }
+        }
+        const perchRatio = totalFireflies > 0 ? perchedFireflies / totalFireflies : 0;
+
+        for (let i = 0; i < tips.length; i++) {
+          const tip = tips[i];
+          if (tip.energy <= 0) continue;
+
+          // Distance to cursor (sun)
+          const dx = sunX - tip.x;
+          const dy = sunY - tip.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+
+          // Phototropism: turn toward sun
+          const sunAngle = Math.atan2(dy, dx);
+          let angleDiff = sunAngle - tip.angle;
+          while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+          while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+          const photoStrength = 0.18 * tip.energy * Math.min(1, 500 / dist);
+
+          // Gravitropism: bias toward nearest wall
+          const nearestWallX = tip.x < viewport.width / 2 ? 0 : viewport.width;
+          const graviTarget = nearestWallX < viewport.width / 2 ? Math.PI : 0;
+          let graviDiff = graviTarget - tip.angle;
+          while (graviDiff > Math.PI) graviDiff -= 2 * Math.PI;
+          while (graviDiff < -Math.PI) graviDiff += 2 * Math.PI;
+          const graviStrength = 0.02;
+
+          // Circumnutation: oscillating wobble
+          tip.phase += 0.15 + Math.random() * 0.05;
+          const nutationStrength = 0.06 * tip.energy;
+          const nutation = Math.sin(tip.phase) * nutationStrength;
+
+          // Combined direction
+          tip.angle += angleDiff * photoStrength + graviDiff * graviStrength + nutation;
+
+          // Sun proximity boost to growth rate
+          const sunProximity = Math.min(1, 300 / dist);
+          const speedBoost = 1 + 0.3 * sunProximity;
+          // Fireflies accelerate proportional to proximity to pointer
+          const fireflyAccel = tip.zapImmunity <= 0
+            ? 0.5 + 1.5 * Math.min(1, 250 / dist)  // close=fast, far=slow
+            : 1;
+          const stepLen = (1.5 + Math.random() * 1.0) * speedBoost * tip.energy * fireflyAccel;
+
+          let nx = tip.x + Math.cos(tip.angle) * stepLen;
+          let ny = tip.y + Math.sin(tip.angle) * stepLen;
+
+          // ── Thigmotropism: pixel-mask collision ──
+          if (checkMaskCollision(nx, ny)) {
+            const norm = computeSurfaceNormal(nx, ny);
+
+            if (!tip.clinging) {
+              tip.clinging = true;
+              tip.clingingProgress = 0;
+              spawnLeaf(tip.x, tip.y, Math.atan2(norm.y, norm.x));
             }
 
-            const idx = (y * width + x) * 4;
+            tip.clingingProgress++;
 
-            if (iter === maxIter) {
-              data[idx] = 0;
-              data[idx + 1] = 0;
-              data[idx + 2] = 0;
-              data[idx + 3] = 0;
+            // Follow surface tangent in the direction closest to current heading
+            const tx1 = -norm.y, ty1 = norm.x;
+            const headX = Math.cos(tip.angle), headY = Math.sin(tip.angle);
+            const dot = tx1 * headX + ty1 * headY;
+            const tx = dot >= 0 ? tx1 : norm.y;
+            const ty = dot >= 0 ? ty1 : -norm.x;
+            tip.angle = Math.atan2(ty, tx);
+
+            // Move along tangent and push outward along normal
+            nx = tip.x + tx * stepLen + norm.x * 2;
+            ny = tip.y + ty * stepLen + norm.y * 2;
+
+            // If still colliding, push harder
+            if (checkMaskCollision(nx, ny)) {
+              nx += norm.x * OBSTACLE_PADDING;
+              ny += norm.y * OBSTACLE_PADDING;
+            }
+
+            // Spawn leaves periodically while clinging
+            if (tip.clingingProgress % LEAF_SPAWN_INTERVAL === 0) {
+              spawnLeaf(tip.x, tip.y, Math.atan2(norm.y, norm.x));
+            }
+          } else if (tip.clinging) {
+            tip.clinging = false;
+            tip.clingingProgress = 0;
+          }
+
+          // Record segment
+          segments.push({
+            x0: tip.x, y0: tip.y,
+            x1: nx, y1: ny,
+            birth: tick,
+            depth: tip.depth,
+            thickness: Math.max(0.5, 2.5 - tip.depth * 0.3),
+          });
+
+          tip.x = nx;
+          tip.y = ny;
+          tip.distSinceNode += stepLen;
+
+          // Energy: sunlight sustains, darkness drains
+          const baseDecay = 0.002 + tip.depth * 0.001;
+          const sunRecharge = 0.008 * sunProximity;
+          tip.energy += sunRecharge - baseDecay;
+          tip.energy = Math.max(0.02, Math.min(tip.energy, 1.0));
+
+          // Node-based branching
+          if (tip.distSinceNode >= BRANCH_SPACING && tip.energy > 0.15 && tips.length + newBranches.length < TIP_CAP) {
+            tip.distSinceNode = 0;
+            const branchEnergy = tip.energy * 0.45;
+            tip.energy *= 0.7;
+            const side = Math.random() < 0.5 ? 1 : -1;
+            newBranches.push({
+              x: tip.x, y: tip.y,
+              angle: tip.angle + BRANCH_ANGLE * side,
+              energy: branchEnergy,
+              depth: tip.depth + 1,
+              phase: Math.random() * Math.PI * 2,
+              distSinceNode: 0,
+              zapImmunity: 0,
+              clinging: false,
+              clingingEdge: null,
+              clingingProgress: 0,
+              perchTimer: 0,
+              perchWingPhase: 0,
+            });
+          }
+
+          // Tick down zap immunity
+          if (tip.zapImmunity > 0) tip.zapImmunity--;
+
+          // ── Firefly perching ──
+          if (tip.perchTimer > 0) {
+            tip.perchWingPhase += 0.3;
+            // Slowly dim while perched
+            tip.energy = Math.max(0.05, tip.energy - 0.004);
+            // Only wake when pointer gets very close (3x zap radius)
+            if (dist < ZAP_RADIUS * 3) {
+              tip.perchTimer = 0;
             } else {
-              const smooth =
-                iter +
-                1 -
-                Math.log2(Math.log2(Math.max(mag, 1.000001)));
-              const t = clamp01(smooth / maxIter);
-              const band = Math.abs(t - 0.45);
-              const edge = Math.exp(-Math.pow(band / 0.11, 2));
-              const alpha = Math.round(255 * Math.pow(edge, 1.2));
-
-              if (alpha < 12) {
-                data[idx] = 0;
-                data[idx + 1] = 0;
-                data[idx + 2] = 0;
-                data[idx + 3] = 0;
-                continue;
-              }
-
-              const colorIndex = Math.min(
-                palette.length - 1,
-                Math.floor(t * (palette.length - 1))
-              );
-              const [r, g, b] = palette[colorIndex];
-              data[idx] = r;
-              data[idx + 1] = g;
-              data[idx + 2] = b;
-              data[idx + 3] = alpha;
+              tip.perchTimer--;
+              nextTips.push(tip);
+              continue;
             }
+          }
+          if (tip.zapImmunity <= 0) {
+            // Perch when pointer is idle or firefly is too far from the light
+            // Probability scales with how many are already perched
+            const shouldPerch = pointerIdle || dist > FIREFLY_FAR_THRESHOLD;
+            const perchProb = 0.04 + perchRatio * 0.96;
+            if (shouldPerch && Math.random() < perchProb) {
+              const perchY = checkPerchOpportunity(tip);
+              tip.perchTimer = 80 + Math.floor(Math.random() * 80);
+              tip.perchWingPhase = 0;
+              // Snap to nearest surface if available, otherwise perch in place
+              if (perchY !== null) {
+                tip.y = perchY;
+              }
+              nextTips.push(tip);
+              continue;
+            }
+          }
+
+          // Zap check: firefly touches the pointer
+          if (tip.zapImmunity <= 0 && dist < ZAP_RADIUS) {
+            const wallDir = tip.x < viewport.width / 2 ? -1 : 1;
+            fallingBugs.push({
+              x: tip.x, y: tip.y,
+              vx: 0,
+              vy: (Math.random() - 0.5) * 1.5,
+              wallDir: wallDir,
+              life: 1.0,
+            });
+            sparks.push({ x: tip.x, y: tip.y, life: 1.0 });
+            continue;
+          }
+
+          // Only die if off-screen
+          const margin = 40;
+          const onScreen = tip.x > -margin && tip.x < viewport.width + margin &&
+            tip.y > -margin && tip.y < viewport.height + margin;
+
+          if (onScreen) {
+            nextTips.push(tip);
           }
         }
 
-        bufferCtx.putImageData(bufferData, 0, 0);
-        ctx.clearRect(0, 0, viewport.width, viewport.height);
-        ctx.drawImage(buffer, 0, 0, viewport.width, viewport.height);
+        tips = nextTips.concat(newBranches);
+
+        // Update falling bugs
+        const nextBugs = [];
+        for (let i = 0; i < fallingBugs.length; i++) {
+          const bug = fallingBugs[i];
+          bug.vx += bug.wallDir * 0.3;
+          bug.vy += 0.05;
+          bug.x += bug.vx;
+          bug.y += bug.vy;
+          bug.life -= 0.008;
+
+          const hitWall = bug.x <= 2 || bug.x >= viewport.width - 2;
+          if (hitWall || bug.life <= 0) {
+            const wallX = bug.x < viewport.width / 2 ? 2 : viewport.width - 2;
+            const sy = Math.max(20, Math.min(viewport.height - 20, bug.y));
+            spawnSeeds(1, wallX, sy);
+          } else {
+            nextBugs.push(bug);
+          }
+        }
+        fallingBugs = nextBugs;
+
+        // Decay sparks
+        sparks = sparks.filter(s => { s.life -= 0.08; return s.life > 0; });
+
+        // Continuous growth: trickle in new seeds when tips are few
+        if (tips.length < 6 && tick % 40 === 0) {
+          spawnSeeds(1);
+        }
       }
 
-      function animate(time = 0) {
+      /* ── Fossilization ── */
+      function fossilize() {
+        const threshold = segments.length - 400;
+
+        // Periodically re-render fossilized segments so their colors age
+        if (tick - lastBarkRefreshTick >= BARK_REFRESH_INTERVAL && fossilIndex > 0) {
+          lastBarkRefreshTick = tick;
+          barkCtx.lineCap = "round";
+          for (let i = 0; i < fossilIndex; i++) {
+            const seg = segments[i];
+            const th = segmentThickness(seg.thickness, seg.birth);
+            barkCtx.strokeStyle = segmentColor(seg.birth, seg.depth);
+            barkCtx.lineWidth = th * dpr;
+            barkCtx.beginPath();
+            barkCtx.moveTo(seg.x0 * dpr, seg.y0 * dpr);
+            barkCtx.lineTo(seg.x1 * dpr, seg.y1 * dpr);
+            barkCtx.stroke();
+          }
+        }
+
+        // Fossilize newly old segments
+        if (fossilIndex < threshold) {
+          barkCtx.lineCap = "round";
+          for (let i = fossilIndex; i < threshold; i++) {
+            const seg = segments[i];
+            const th = segmentThickness(seg.thickness, seg.birth);
+            barkCtx.strokeStyle = segmentColor(seg.birth, seg.depth);
+            barkCtx.lineWidth = th * dpr;
+            barkCtx.beginPath();
+            barkCtx.moveTo(seg.x0 * dpr, seg.y0 * dpr);
+            barkCtx.lineTo(seg.x1 * dpr, seg.y1 * dpr);
+            barkCtx.stroke();
+          }
+          fossilIndex = threshold;
+        }
+
+        // Recycle when overflowing
+        if (segments.length > SEGMENT_CAP && fossilIndex > 2000) {
+          segments.splice(0, 500);
+          fossilIndex -= 500;
+        }
+      }
+
+      /* ── Render frame ── */
+      function render() {
         pointer.currentX += (pointer.targetX - pointer.currentX) * 0.08;
         pointer.currentY += (pointer.targetY - pointer.currentY) * 0.08;
 
-        if (time - lastRenderTime > julia.renderInterval) {
-          renderJuliaField(time);
-          lastRenderTime = time;
+        fossilize();
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(barkCanvas, 0, 0);
+
+        // Draw fresh segments
+        ctx.lineCap = "round";
+        for (let i = fossilIndex; i < segments.length; i++) {
+          const seg = segments[i];
+          const th = segmentThickness(seg.thickness, seg.birth);
+          ctx.strokeStyle = segmentColor(seg.birth, seg.depth);
+          ctx.lineWidth = th * dpr;
+          ctx.beginPath();
+          ctx.moveTo(seg.x0 * dpr, seg.y0 * dpr);
+          ctx.lineTo(seg.x1 * dpr, seg.y1 * dpr);
+          ctx.stroke();
         }
 
-        animationFrame = requestAnimationFrame(animate);
+        // Draw leaves (bezier leaf shapes)
+        for (let i = 0; i < leaves.length; i++) {
+          const leaf = leaves[i];
+          const lx = leaf.x * dpr;
+          const ly = leaf.y * dpr;
+          const sz = leaf.size * dpr;
+          const a = leaf.angle;
+
+          ctx.save();
+          ctx.translate(lx, ly);
+          ctx.rotate(a);
+          ctx.fillStyle = leafColor(leaf.birth);
+          ctx.globalAlpha = 0.75;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.quadraticCurveTo(sz * 0.5, -sz * 0.35, sz, 0);
+          ctx.quadraticCurveTo(sz * 0.5, sz * 0.35, 0, 0);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Draw tips: plant buds while immune, fireflies when zappable
+        for (let i = 0; i < tips.length; i++) {
+          const tip = tips[i];
+
+          if (tip.zapImmunity > 0) {
+            const budPulse = 0.8 + 0.2 * Math.sin(renderTick * 0.1 + tip.phase);
+            const radius = (2 + tip.energy * 1.5) * dpr * budPulse;
+            const g = Math.round(160 + 60 * tip.energy);
+            ctx.save();
+            ctx.globalAlpha = 0.9;
+            ctx.fillStyle = `rgb(50,${g},40)`;
+            ctx.beginPath();
+            ctx.arc(tip.x * dpr, tip.y * dpr, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          } else if (tip.perchTimer > 0) {
+            // Perched firefly — dims over time based on energy
+            const px = tip.x * dpr;
+            const py = tip.y * dpr;
+            const wingFlap = Math.sin(tip.perchWingPhase) * 0.5;
+            const bodyR = 2 * dpr;
+            const brightness = tip.energy;
+
+            ctx.save();
+            // Glow (fades with brightness)
+            ctx.globalAlpha = 0.25 * brightness;
+            const gr = Math.round(220 * brightness);
+            const gg = Math.round(210 * brightness);
+            const gb = Math.round(60 * brightness);
+            ctx.fillStyle = `rgb(${gr},${gg},${gb})`;
+            ctx.beginPath();
+            ctx.arc(px, py, bodyR * 3 * brightness, 0, Math.PI * 2);
+            ctx.fill();
+            // Body
+            ctx.globalAlpha = 0.4 + 0.45 * brightness;
+            const br = Math.round(120 + 80 * brightness);
+            const bg = Math.round(110 + 80 * brightness);
+            const bb = Math.round(20 + 20 * brightness);
+            ctx.fillStyle = `rgb(${br},${bg},${bb})`;
+            ctx.beginPath();
+            ctx.arc(px, py, bodyR, 0, Math.PI * 2);
+            ctx.fill();
+            // Wings
+            ctx.strokeStyle = `rgba(200,200,180,${0.3 * brightness})`;
+            ctx.lineWidth = 1 * dpr;
+            const wingLen = 4 * dpr;
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(px - wingLen, py - wingLen * (0.5 + wingFlap));
+            ctx.moveTo(px, py);
+            ctx.lineTo(px + wingLen, py - wingLen * (0.5 + wingFlap));
+            ctx.stroke();
+            ctx.restore();
+          } else {
+            const flicker = 0.6 + 0.4 * Math.sin(renderTick * 0.15 + tip.phase * 3) * Math.sin(renderTick * 0.07 + tip.phase);
+            const glow = tip.energy * flicker;
+            const radius = (1.2 + glow * 2.5) * dpr;
+
+            const r = Math.round(200 + 55 * glow);
+            const g = Math.round(190 + 50 * glow);
+            const b = Math.round(40 + 30 * glow);
+            const alpha = 0.4 + 0.6 * glow;
+
+            ctx.save();
+            ctx.globalAlpha = alpha * 0.3;
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.beginPath();
+            ctx.arc(tip.x * dpr, tip.y * dpr, radius * 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.globalAlpha = alpha;
+            ctx.beginPath();
+            ctx.arc(tip.x * dpr, tip.y * dpr, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        // Draw zap sparks
+        for (let i = 0; i < sparks.length; i++) {
+          const s = sparks[i];
+          ctx.save();
+          ctx.globalAlpha = s.life * 0.7;
+          ctx.fillStyle = `rgb(255,${Math.round(240 + 15 * s.life)},${Math.round(140 * s.life)})`;
+          const sr = (3 + 5 * s.life) * dpr;
+          ctx.beginPath();
+          ctx.arc(s.x * dpr, s.y * dpr, sr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Draw falling bugs
+        for (let i = 0; i < fallingBugs.length; i++) {
+          const bug = fallingBugs[i];
+          const br = (1 + bug.life) * dpr;
+          ctx.save();
+          ctx.globalAlpha = bug.life * 0.6;
+          ctx.fillStyle = `rgb(${Math.round(180 + 60 * bug.life)},${Math.round(140 * bug.life)},30)`;
+          ctx.beginPath();
+          ctx.arc(bug.x * dpr, bug.y * dpr, br, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        renderTick++;
+        animationFrame = requestAnimationFrame(render);
       }
 
+      /* ── Canvas sizing ── */
+      function resizeCanvas() {
+        viewport.width = window.innerWidth;
+        viewport.height = window.innerHeight;
+        dpr = window.devicePixelRatio || 1;
+
+        canvas.width = viewport.width * dpr;
+        canvas.height = viewport.height * dpr;
+        canvas.style.width = viewport.width + "px";
+        canvas.style.height = viewport.height + "px";
+
+        barkCanvas.width = viewport.width * dpr;
+        barkCanvas.height = viewport.height * dpr;
+
+        barkCtx.lineCap = "round";
+        for (let i = 0; i < fossilIndex; i++) {
+          const seg = segments[i];
+          const th = segmentThickness(seg.thickness, seg.birth);
+          barkCtx.strokeStyle = segmentColor(seg.birth, seg.depth);
+          barkCtx.lineWidth = th * dpr;
+          barkCtx.beginPath();
+          barkCtx.moveTo(seg.x0 * dpr, seg.y0 * dpr);
+          barkCtx.lineTo(seg.x1 * dpr, seg.y1 * dpr);
+          barkCtx.stroke();
+        }
+
+        updateTextMask();
+      }
+
+      /* ── Pointer / event handlers ── */
       function updateMaskPosition(event) {
         const x = (event.clientX / window.innerWidth) * 100;
         const y = (event.clientY / window.innerHeight) * 100;
@@ -349,15 +991,27 @@
 
       window.addEventListener("resize", resizeCanvas, { passive: true });
       window.addEventListener("mousemove", updateMaskPosition, { passive: true });
-      window.addEventListener("touchmove", (event) => {
-        if (event.touches && event.touches[0]) {
-          updateMaskPosition(event.touches[0]);
-        }
-      }, { passive: true });
+      window.addEventListener(
+        "touchmove",
+        (event) => {
+          if (event.touches && event.touches[0]) {
+            updateMaskPosition(event.touches[0]);
+          }
+        },
+        { passive: true }
+      );
       window.addEventListener("mouseleave", handleLeave);
+
+      /* ── Init ── */
+      splitTextToLetters();
       resizeCanvas();
-      animate();
+      updateTextMask();
+      spawnSeeds(3 + Math.floor(Math.random() * 3));
+      for (let i = 0; i < PREGROW_TICKS; i++) {
+        growTick();
+      }
+      growInterval = setInterval(growTick, 1000 / GROWTH_HZ);
+      render();
     </script>
   </body>
 </html>
-
