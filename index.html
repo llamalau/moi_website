@@ -311,15 +311,57 @@
       let maskW = 0, maskH = 0;
 
       /* ── Color helpers ── */
-      function segmentColor(birthTick, depth) {
-        const age = tick - birthTick;
-        const ageFactor = Math.min(1, age / 150);
-        const depthDim = Math.min(1, depth / 8);
+      // Derive complementary palette from background color
+      // bg #edf5ee → RGB(237,245,238) → HSL ~(126°, 30%, 95%)
+      const BG_HUE = 126;
+      // Complementary hues: 180° opposite, plus split-complementary offsets
+      const COMP_HUES = [
+        (BG_HUE + 180) % 360,  // 306 — magenta/purple
+        (BG_HUE + 150) % 360,  // 276 — violet
+        (BG_HUE + 210) % 360,  // 336 — rose
+        (BG_HUE + 120) % 360,  // 246 — blue-violet
+        (BG_HUE + 240) % 360,  //   6 — warm red
+      ];
 
-        // Vivid green → dark green → warm brown
-        const r = Math.round(30 + 110 * ageFactor + 15 * depthDim);
-        const g = Math.round(210 - 160 * ageFactor - 20 * depthDim);
-        const b = Math.round(30 - 10 * ageFactor);
+      function hslToRgb(h, s, l) {
+        s /= 100; l /= 100;
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+        const m = l - c / 2;
+        let r, g, b;
+        if (h < 60) { r = c; g = x; b = 0; }
+        else if (h < 120) { r = x; g = c; b = 0; }
+        else if (h < 180) { r = 0; g = c; b = x; }
+        else if (h < 240) { r = 0; g = x; b = c; }
+        else if (h < 300) { r = x; g = 0; b = c; }
+        else { r = c; g = 0; b = x; }
+        return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+      }
+
+      function segmentColor(birthTick, depth, hueOffset) {
+        // Each vine starts at a different point in the palette (hueOffset)
+        // and pulsates slowly over time
+        const base = hueOffset || 0;
+        const pulse = (base + tick * 0.012) % COMP_HUES.length;
+        const idx = Math.floor(pulse);
+        const frac = pulse - idx;
+        const h1 = COMP_HUES[idx];
+        const h2 = COMP_HUES[(idx + 1) % COMP_HUES.length];
+
+        // Interpolate hue (shortest arc)
+        let dh = h2 - h1;
+        if (dh > 180) dh -= 360;
+        if (dh < -180) dh += 360;
+        const hue = ((h1 + dh * frac) % 360 + 360) % 360;
+
+        // Deeper branches are dimmer; age slightly desaturates
+        const depthDim = Math.min(1, depth / 8);
+        const age = tick - birthTick;
+        const ageFactor = Math.min(1, age / 200);
+        const sat = 55 - 20 * ageFactor - 10 * depthDim;
+        const lum = 50 - 15 * ageFactor - 10 * depthDim;
+
+        const [r, g, b] = hslToRgb(hue, sat, lum);
         return `rgb(${r},${g},${b})`;
       }
 
@@ -496,6 +538,7 @@
             clingingProgress: 0,
             perchTimer: 0,
             perchWingPhase: 0,
+            hueOffset: Math.random() * COMP_HUES.length,
           });
         }
       }
@@ -623,6 +666,7 @@
             birth: tick,
             depth: tip.depth,
             thickness: Math.max(0.5, 2.5 - tip.depth * 0.3),
+            hueOffset: tip.hueOffset,
           });
 
           tip.x = nx;
@@ -654,6 +698,7 @@
               clingingProgress: 0,
               perchTimer: 0,
               perchWingPhase: 0,
+              hueOffset: (tip.hueOffset + 0.7 + Math.random() * 0.6) % COMP_HUES.length,
             });
           }
 
@@ -759,7 +804,7 @@
           for (let i = 0; i < fossilIndex; i++) {
             const seg = segments[i];
             const th = segmentThickness(seg.thickness, seg.birth);
-            barkCtx.strokeStyle = segmentColor(seg.birth, seg.depth);
+            barkCtx.strokeStyle = segmentColor(seg.birth, seg.depth, seg.hueOffset);
             barkCtx.lineWidth = th * dpr;
             barkCtx.beginPath();
             barkCtx.moveTo(seg.x0 * dpr, seg.y0 * dpr);
@@ -774,7 +819,7 @@
           for (let i = fossilIndex; i < threshold; i++) {
             const seg = segments[i];
             const th = segmentThickness(seg.thickness, seg.birth);
-            barkCtx.strokeStyle = segmentColor(seg.birth, seg.depth);
+            barkCtx.strokeStyle = segmentColor(seg.birth, seg.depth, seg.hueOffset);
             barkCtx.lineWidth = th * dpr;
             barkCtx.beginPath();
             barkCtx.moveTo(seg.x0 * dpr, seg.y0 * dpr);
@@ -806,7 +851,7 @@
         for (let i = fossilIndex; i < segments.length; i++) {
           const seg = segments[i];
           const th = segmentThickness(seg.thickness, seg.birth);
-          ctx.strokeStyle = segmentColor(seg.birth, seg.depth);
+          ctx.strokeStyle = segmentColor(seg.birth, seg.depth, seg.hueOffset);
           ctx.lineWidth = th * dpr;
           ctx.beginPath();
           ctx.moveTo(seg.x0 * dpr, seg.y0 * dpr);
@@ -961,7 +1006,7 @@
         for (let i = 0; i < fossilIndex; i++) {
           const seg = segments[i];
           const th = segmentThickness(seg.thickness, seg.birth);
-          barkCtx.strokeStyle = segmentColor(seg.birth, seg.depth);
+          barkCtx.strokeStyle = segmentColor(seg.birth, seg.depth, seg.hueOffset);
           barkCtx.lineWidth = th * dpr;
           barkCtx.beginPath();
           barkCtx.moveTo(seg.x0 * dpr, seg.y0 * dpr);
