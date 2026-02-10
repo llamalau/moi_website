@@ -272,7 +272,9 @@
       const POINTER_IDLE_THRESHOLD = 40;   // ticks of no movement before fireflies perch
       const FIREFLY_FAR_THRESHOLD = 500;   // distance beyond which fireflies perch
 
-      /* ── Two-layer rendering ── */
+      /* ── Three-layer rendering: maze (static bg) → bark (fossilized vines) → live ── */
+      const mazeCanvas = document.createElement("canvas");
+      const mazeCtx = mazeCanvas.getContext("2d");
       const barkCanvas = document.createElement("canvas");
       const barkCtx = barkCanvas.getContext("2d");
 
@@ -301,8 +303,396 @@
       /* ── Obstacle / leaf / perch state ── */
       const OBSTACLE_PADDING = 8;
       let leaves = [];
-      const LEAF_CAP = 200;
+      const LEAF_CAP = 400;
       const LEAF_SPAWN_INTERVAL = 8;
+
+      /* ── Moss (persistent, slow-growing leaf carpet) ── */
+      let mossPoints = [];
+      const MOSS_CAP = 3000;
+      const MOSS_GROW_INTERVAL = 40;    // ticks between new moss dots (~2s at 20Hz)
+      const MOSS_SAVE_INTERVAL = 1200;  // ticks between localStorage saves (~1 min)
+      const MOSS_STORAGE_KEY = "vine_moss_v1";
+      const VINE_STORAGE_KEY = "vine_segments_v1";
+      const LEAF_STORAGE_KEY = "vine_leaves_v1";
+      const SAVE_INTERVAL = 1200;       // ticks between all localStorage saves (~1 min)
+      const VINE_SAVE_CAP = 8000;       // max segments to persist
+
+      function loadPersisted() {
+        try {
+          // Load moss
+          const mRaw = localStorage.getItem(MOSS_STORAGE_KEY);
+          if (mRaw) {
+            const saved = JSON.parse(mRaw);
+            if (Array.isArray(saved)) mossPoints = saved;
+          }
+          // Load vine segments
+          const vRaw = localStorage.getItem(VINE_STORAGE_KEY);
+          if (vRaw) {
+            const saved = JSON.parse(vRaw);
+            if (Array.isArray(saved)) {
+              for (let i = 0; i < saved.length; i++) {
+                const s = saved[i];
+                segments.push({
+                  x0: s[0], y0: s[1], x1: s[2], y1: s[3],
+                  birth: -1000,   // fully aged
+                  depth: s[4],
+                  thickness: s[5],
+                  hueOffset: s[6],
+                });
+              }
+              fossilIndex = segments.length;
+            }
+          }
+          // Load leaves
+          const lRaw = localStorage.getItem(LEAF_STORAGE_KEY);
+          if (lRaw) {
+            const saved = JSON.parse(lRaw);
+            if (Array.isArray(saved)) {
+              for (let i = 0; i < saved.length; i++) {
+                const l = saved[i];
+                leaves.push({ x: l[0], y: l[1], angle: l[2], size: l[3], birth: -1000 });
+              }
+            }
+          }
+        } catch (e) { /* ignore parse errors */ }
+      }
+
+      function savePersisted() {
+        try {
+          // Save moss
+          localStorage.setItem(MOSS_STORAGE_KEY, JSON.stringify(mossPoints.slice(-MOSS_CAP)));
+          // Save vine segments (compact: [x0,y0,x1,y1,depth,thickness,hueOffset])
+          const start = Math.max(0, fossilIndex - VINE_SAVE_CAP);
+          const vines = [];
+          for (let i = start; i < fossilIndex; i++) {
+            const s = segments[i];
+            vines.push([
+              Math.round(s.x0 * 10) / 10, Math.round(s.y0 * 10) / 10,
+              Math.round(s.x1 * 10) / 10, Math.round(s.y1 * 10) / 10,
+              s.depth,
+              Math.round(s.thickness * 100) / 100,
+              Math.round(s.hueOffset * 100) / 100,
+            ]);
+          }
+          localStorage.setItem(VINE_STORAGE_KEY, JSON.stringify(vines));
+          // Save leaves (compact: [x,y,angle,size])
+          const leavesData = [];
+          for (let i = 0; i < leaves.length; i++) {
+            const l = leaves[i];
+            leavesData.push([
+              Math.round(l.x * 10) / 10, Math.round(l.y * 10) / 10,
+              Math.round(l.angle * 100) / 100, Math.round(l.size * 10) / 10,
+            ]);
+          }
+          localStorage.setItem(LEAF_STORAGE_KEY, JSON.stringify(leavesData));
+        } catch (e) { /* ignore quota errors */ }
+      }
+
+      function growMoss() {
+        if (mossPoints.length >= MOSS_CAP) return;
+        if (fossilIndex < 10) return;
+
+        // Pick a random fossilized segment — naturally biases toward dense areas
+        const idx = Math.floor(Math.random() * fossilIndex);
+        const seg = segments[idx];
+        if (!seg) return;
+
+        // Place directly on the vine segment (interpolate along it)
+        const t = Math.random();
+        const mx = seg.x0 + (seg.x1 - seg.x0) * t;
+        const my = seg.y0 + (seg.y1 - seg.y0) * t;
+
+        const size = 1.5 + Math.random() * 3;
+        const hue = 100 + Math.random() * 50;
+        const sat = 30 + Math.random() * 30;
+        const lum = 25 + Math.random() * 20;
+        mossPoints.push({ x: mx, y: my, size, hue, sat, lum });
+      }
+
+      /* ── Organic maze (grid + noise-perturbed corridors) ── */
+      const MAZE_CELL = 28;            // grid cell size (px)
+      const CORRIDOR_WIDTH = 12;       // corridor width (px)
+      const MAZE_PERTURB = 4;          // bezier perturbation amplitude (px)
+      const NOISE_SCALE = 2;           // noise field resolution (1 noise px = 2 real px)
+      const MAZE_BRAID_RATIO = 0.15;
+      let mazeGrid = null;
+      let mazeCols = 0;
+      let mazeRows = 0;
+      let noiseFieldCanvas = null;
+      let noiseFieldW = 0;
+      let noiseFieldH = 0;
+      let mazeEdgeCorridors = null;
+      let lastScrollY = 0;
+
+      // Perlin noise for corridor perturbation
+      const noisePerm = new Uint8Array(512);
+      const noiseGrad = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+      let noiseSeeded = false;
+
+      function seedNoise() {
+        if (noiseSeeded) return;
+        const p = new Uint8Array(256);
+        for (let i = 0; i < 256; i++) p[i] = i;
+        for (let i = 255; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = p[i]; p[i] = p[j]; p[j] = tmp;
+        }
+        for (let i = 0; i < 512; i++) noisePerm[i] = p[i & 255];
+        noiseSeeded = true;
+      }
+
+      function noiseFade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+
+      function noise2d(x, y) {
+        const xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
+        const xf = x - Math.floor(x), yf = y - Math.floor(y);
+        const u = noiseFade(xf), v = noiseFade(yf);
+        const aa = noisePerm[noisePerm[xi] + yi];
+        const ab = noisePerm[noisePerm[xi] + yi + 1];
+        const ba = noisePerm[noisePerm[xi + 1] + yi];
+        const bb = noisePerm[noisePerm[xi + 1] + yi + 1];
+        const g = noiseGrad;
+        const d1 = g[aa & 7][0] * xf + g[aa & 7][1] * yf;
+        const d2 = g[ba & 7][0] * (xf - 1) + g[ba & 7][1] * yf;
+        const d3 = g[ab & 7][0] * xf + g[ab & 7][1] * (yf - 1);
+        const d4 = g[bb & 7][0] * (xf - 1) + g[bb & 7][1] * (yf - 1);
+        return (d1 + u * (d2 - d1)) + v * ((d3 + u * (d4 - d3)) - (d1 + u * (d2 - d1)));
+      }
+
+      // ── Maze generation (Growing Tree 75/25) ──
+      function generateMaze(cols, rows) {
+        const grid = [];
+        for (let r = 0; r < rows; r++) {
+          grid[r] = [];
+          for (let c = 0; c < cols; c++) {
+            grid[r][c] = { top: true, right: true, bottom: true, left: true, visited: false };
+          }
+        }
+        const active = [];
+        const sr = Math.floor(Math.random() * rows);
+        const sc = Math.floor(Math.random() * cols);
+        grid[sr][sc].visited = true;
+        active.push([sr, sc]);
+        const dirs = [[0,1,"right","left"],[0,-1,"left","right"],
+                      [1,0,"bottom","top"],[-1,0,"top","bottom"]];
+        while (active.length > 0) {
+          const idx = Math.random() < 0.75
+            ? active.length - 1
+            : Math.floor(Math.random() * active.length);
+          const [cr, cc] = active[idx];
+          const neighbors = [];
+          for (let d = 0; d < dirs.length; d++) {
+            const nr = cr + dirs[d][0], nc = cc + dirs[d][1];
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !grid[nr][nc].visited)
+              neighbors.push(d);
+          }
+          if (neighbors.length === 0) {
+            active[idx] = active[active.length - 1]; active.pop(); continue;
+          }
+          const d = neighbors[Math.floor(Math.random() * neighbors.length)];
+          const nr = cr + dirs[d][0], nc = cc + dirs[d][1];
+          grid[cr][cc][dirs[d][2]] = false;
+          grid[nr][nc][dirs[d][3]] = false;
+          grid[nr][nc].visited = true;
+          active.push([nr, nc]);
+        }
+        return grid;
+      }
+
+      function braidDeadEnds(grid, cols, rows, fraction) {
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const cell = grid[r][c];
+            const wallCount = (cell.top?1:0)+(cell.right?1:0)+(cell.bottom?1:0)+(cell.left?1:0);
+            if (wallCount !== 3 || Math.random() >= fraction) continue;
+            const cands = [];
+            if (cell.top && r > 0) cands.push(["top","bottom",r-1,c]);
+            if (cell.bottom && r < rows-1) cands.push(["bottom","top",r+1,c]);
+            if (cell.left && c > 0) cands.push(["left","right",r,c-1]);
+            if (cell.right && c < cols-1) cands.push(["right","left",r,c+1]);
+            if (cands.length === 0) continue;
+            const pick = cands[Math.floor(Math.random() * cands.length)];
+            grid[r][c][pick[0]] = false;
+            grid[pick[2]][pick[3]][pick[1]] = false;
+          }
+        }
+      }
+
+      function carveAroundObstacles(grid, cols, rows) {
+        const pad = 2;
+        const scrollY = window.scrollY || 0;
+        const elements = document.querySelectorAll("section, header");
+        for (let i = 0; i < elements.length; i++) {
+          const rect = elements[i].getBoundingClientRect();
+          const aTop = rect.top + scrollY - pad;
+          const aBot = rect.bottom + scrollY + pad;
+          const aLeft = rect.left - pad;
+          const aRight = rect.right + pad;
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const cx = c * MAZE_CELL, cy = r * MAZE_CELL;
+              if (cx + MAZE_CELL > aLeft && cx < aRight && cy + MAZE_CELL > aTop && cy < aBot) {
+                grid[r][c].top = false; grid[r][c].right = false;
+                grid[r][c].bottom = false; grid[r][c].left = false;
+                if (r > 0) grid[r-1][c].bottom = false;
+                if (r < rows-1) grid[r+1][c].top = false;
+                if (c > 0) grid[r][c-1].right = false;
+                if (c < cols-1) grid[r][c+1].left = false;
+              }
+            }
+          }
+        }
+      }
+
+      function createEdgeOpenings(grid, cols, rows) {
+        const count = Math.max(2, Math.floor(rows / 4));
+        for (let i = 0; i < count; i++) {
+          const base = Math.floor((i + 0.5) * rows / count);
+          const lr = Math.max(0, Math.min(rows-1, base + Math.floor((Math.random()-0.5)*2)));
+          grid[lr][0].left = false;
+          const rr = Math.max(0, Math.min(rows-1, base + Math.floor((Math.random()-0.5)*2)));
+          grid[rr][cols-1].right = false;
+        }
+      }
+
+      // ── Render maze as filled wall mass with corridor holes ──
+      function generateNoiseField() {
+        const pageH = Math.max(document.body.scrollHeight, viewport.height);
+        noiseFieldW = Math.ceil(viewport.width / NOISE_SCALE);
+        noiseFieldH = Math.ceil(pageH / NOISE_SCALE);
+
+        noiseFieldCanvas = document.createElement("canvas");
+        noiseFieldCanvas.width = noiseFieldW;
+        noiseFieldCanvas.height = noiseFieldH;
+        const nfCtx = noiseFieldCanvas.getContext("2d");
+        const s = 1 / NOISE_SCALE;
+        const corridorS = CORRIDOR_WIDTH * s;
+        const perturbS = MAZE_PERTURB * s;
+        const halfCell = MAZE_CELL / 2;
+
+        // Step 1: Fill everything with white (wall)
+        nfCtx.fillStyle = "white";
+        nfCtx.fillRect(0, 0, noiseFieldW, noiseFieldH);
+
+        // Step 2: Punch out corridors with destination-out
+        nfCtx.globalCompositeOperation = "destination-out";
+        nfCtx.fillStyle = "white";
+        nfCtx.strokeStyle = "white";
+        nfCtx.lineCap = "round";
+        nfCtx.lineJoin = "round";
+        nfCtx.lineWidth = corridorS;
+
+        for (let r = 0; r < mazeRows; r++) {
+          for (let c = 0; c < mazeCols; c++) {
+            const cell = mazeGrid[r][c];
+            const cx = (c * MAZE_CELL + halfCell) * s;
+            const cy = (r * MAZE_CELL + halfCell) * s;
+            const allOpen = !cell.top && !cell.right && !cell.bottom && !cell.left;
+
+            // Fully carved cells: clear entire cell area
+            if (allOpen) {
+              nfCtx.fillRect(c * MAZE_CELL * s, r * MAZE_CELL * s, MAZE_CELL * s, MAZE_CELL * s);
+              continue;
+            }
+
+            // Right passage → bezier curve to right neighbor
+            if (!cell.right && c < mazeCols - 1) {
+              const nx = ((c+1) * MAZE_CELL + halfCell) * s;
+              const midX = (cx + nx) / 2;
+              const midY = cy + noise2d(c * 5.7 + r * 0.3, r * 3.1) * perturbS;
+              nfCtx.beginPath();
+              nfCtx.moveTo(cx, cy);
+              nfCtx.quadraticCurveTo(midX, midY, nx, cy);
+              nfCtx.stroke();
+            }
+
+            // Bottom passage → bezier curve to below neighbor
+            if (!cell.bottom && r < mazeRows - 1) {
+              const ny = ((r+1) * MAZE_CELL + halfCell) * s;
+              const midX = cx + noise2d(c * 3.1 + 100, r * 5.7 + 100) * perturbS;
+              const midY = (cy + ny) / 2;
+              nfCtx.beginPath();
+              nfCtx.moveTo(cx, cy);
+              nfCtx.quadraticCurveTo(midX, midY, cx, ny);
+              nfCtx.stroke();
+            }
+
+            // Edge openings
+            if (!cell.left && c === 0) {
+              nfCtx.beginPath(); nfCtx.moveTo(cx, cy); nfCtx.lineTo(0, cy); nfCtx.stroke();
+            }
+            if (!cell.right && c === mazeCols - 1) {
+              nfCtx.beginPath(); nfCtx.moveTo(cx, cy); nfCtx.lineTo(noiseFieldW, cy); nfCtx.stroke();
+            }
+            if (!cell.top && r === 0) {
+              nfCtx.beginPath(); nfCtx.moveTo(cx, cy); nfCtx.lineTo(cx, 0); nfCtx.stroke();
+            }
+            if (!cell.bottom && r === mazeRows - 1) {
+              nfCtx.beginPath(); nfCtx.moveTo(cx, cy); nfCtx.lineTo(cx, noiseFieldH); nfCtx.stroke();
+            }
+          }
+        }
+
+        // Step 3: Clear areas around DOM elements (rounded rects)
+        const scrollY = window.scrollY || 0;
+        const elements = document.querySelectorAll("section, header");
+        const pad = 10;
+        for (let i = 0; i < elements.length; i++) {
+          const rect = elements[i].getBoundingClientRect();
+          nfCtx.beginPath();
+          nfCtx.roundRect(
+            (rect.left - pad) * s, (rect.top + scrollY - pad) * s,
+            (rect.width + pad * 2) * s, (rect.height + pad * 2) * s, 24 * s);
+          nfCtx.fill();
+        }
+
+        nfCtx.globalCompositeOperation = "source-over";
+      }
+
+      function findEdgeCorridors() {
+        if (!mazeGrid) { mazeEdgeCorridors = null; return; }
+        const left = [], right = [];
+        for (let r = 0; r < mazeRows; r++) {
+          if (!mazeGrid[r][0].left) left.push(r * MAZE_CELL + MAZE_CELL / 2);
+          if (!mazeGrid[r][mazeCols - 1].right) right.push(r * MAZE_CELL + MAZE_CELL / 2);
+        }
+        mazeEdgeCorridors = { left, right };
+      }
+
+      function initMaze() {
+        seedNoise();
+        const pageH = Math.max(document.body.scrollHeight, viewport.height);
+        mazeCols = Math.floor(viewport.width / MAZE_CELL);
+        mazeRows = Math.floor(pageH / MAZE_CELL);
+        if (mazeCols < 3 || mazeRows < 3) {
+          mazeGrid = null; noiseFieldCanvas = null; mazeEdgeCorridors = null; return;
+        }
+        mazeGrid = generateMaze(mazeCols, mazeRows);
+        braidDeadEnds(mazeGrid, mazeCols, mazeRows, MAZE_BRAID_RATIO);
+        carveAroundObstacles(mazeGrid, mazeCols, mazeRows);
+        createEdgeOpenings(mazeGrid, mazeCols, mazeRows);
+        generateNoiseField();
+        findEdgeCorridors();
+      }
+
+      function renderMazeVisual() {
+        mazeCanvas.width = viewport.width * dpr;
+        mazeCanvas.height = viewport.height * dpr;
+        if (!noiseFieldCanvas) return;
+        const scrollY = window.scrollY || 0;
+        const srcY = scrollY / NOISE_SCALE;
+        const srcH = viewport.height / NOISE_SCALE;
+        mazeCtx.globalAlpha = 0.07;
+        mazeCtx.fillStyle = "rgb(55, 100, 76)";
+        mazeCtx.fillRect(0, 0, mazeCanvas.width, mazeCanvas.height);
+        mazeCtx.globalAlpha = 1;
+        mazeCtx.globalCompositeOperation = "destination-in";
+        mazeCtx.imageSmoothingEnabled = true;
+        mazeCtx.imageSmoothingQuality = "high";
+        mazeCtx.drawImage(noiseFieldCanvas, 0, srcY, noiseFieldW, srcH,
+          0, 0, mazeCanvas.width, mazeCanvas.height);
+        mazeCtx.globalCompositeOperation = "source-over";
+      }
 
       /* ── Pixel-based collision mask ── */
       const textMaskCanvas = document.createElement("canvas");
@@ -442,6 +832,16 @@
           textMaskCtx.fill();
         }
 
+        // Render noise-based maze walls into the collision mask
+        if (noiseFieldCanvas) {
+          const scrollY = window.scrollY || 0;
+          const srcY = scrollY / NOISE_SCALE;
+          const srcH = maskH / NOISE_SCALE;
+          textMaskCtx.imageSmoothingEnabled = true;
+          textMaskCtx.drawImage(noiseFieldCanvas, 0, srcY, noiseFieldW, srcH,
+            0, 0, maskW, maskH);
+        }
+
         textMaskData = textMaskCtx.getImageData(0, 0, maskW, maskH).data;
       }
 
@@ -517,6 +917,34 @@
             angle = x < viewport.width / 2
               ? (Math.random() - 0.5) * 0.8
               : Math.PI + (Math.random() - 0.5) * 0.8;
+          } else if (noiseFieldCanvas && mazeEdgeCorridors) {
+            // Spawn at a corridor opening visible in the current viewport
+            const scrollY = window.scrollY || 0;
+            const visLeft = mazeEdgeCorridors.left.filter(py => {
+              const vy = py - scrollY;
+              return vy > 10 && vy < viewport.height - 10;
+            });
+            const visRight = mazeEdgeCorridors.right.filter(py => {
+              const vy = py - scrollY;
+              return vy > 10 && vy < viewport.height - 10;
+            });
+            const hasLeft = visLeft.length > 0;
+            const hasRight = visRight.length > 0;
+            if ((Math.random() < 0.5 && hasLeft) || (!hasRight && hasLeft)) {
+              const py = visLeft[Math.floor(Math.random() * visLeft.length)];
+              x = 2;
+              y = py - scrollY;
+              angle = (Math.random() - 0.5) * 0.8;
+            } else if (hasRight) {
+              const py = visRight[Math.floor(Math.random() * visRight.length)];
+              x = viewport.width - 2;
+              y = py - scrollY;
+              angle = Math.PI + (Math.random() - 0.5) * 0.8;
+            } else {
+              x = Math.random() < 0.5 ? 2 : viewport.width - 2;
+              y = viewport.height * (0.15 + Math.random() * 0.7);
+              angle = x < viewport.width / 2 ? (Math.random() - 0.5) * 0.8 : Math.PI + (Math.random() - 0.5) * 0.8;
+            }
           } else if (Math.random() < 0.5) {
             x = 2;
             y = viewport.height * (0.15 + Math.random() * 0.7);
@@ -620,8 +1048,27 @@
           let nx = tip.x + Math.cos(tip.angle) * stepLen;
           let ny = tip.y + Math.sin(tip.angle) * stepLen;
 
+          // ── Ray-march collision: check intermediate points so fast tips can't skip through walls ──
+          let hitCollision = false;
+          if (stepLen > 3) {
+            const steps = Math.ceil(stepLen / 3);
+            const dxStep = (nx - tip.x) / steps;
+            const dyStep = (ny - tip.y) / steps;
+            for (let s = 1; s <= steps; s++) {
+              const sx = tip.x + dxStep * s;
+              const sy = tip.y + dyStep * s;
+              if (checkMaskCollision(sx, sy)) {
+                nx = sx; ny = sy;
+                hitCollision = true;
+                break;
+              }
+            }
+          } else {
+            hitCollision = checkMaskCollision(nx, ny);
+          }
+
           // ── Thigmotropism: pixel-mask collision ──
-          if (checkMaskCollision(nx, ny)) {
+          if (hitCollision) {
             const norm = computeSurfaceNormal(nx, ny);
 
             if (!tip.clinging) {
@@ -787,6 +1234,15 @@
         // Decay sparks
         sparks = sparks.filter(s => { s.life -= 0.08; return s.life > 0; });
 
+        // Moss growth: slowly add moss dots near vine segments
+        if (tick % MOSS_GROW_INTERVAL === 0) {
+          growMoss();
+        }
+        // Save all persistent state periodically
+        if (tick % SAVE_INTERVAL === 0 && fossilIndex > 0) {
+          savePersisted();
+        }
+
         // Continuous growth: trickle in new seeds when tips are few
         if (tips.length < 6 && tick % 40 === 0) {
           spawnSeeds(1);
@@ -844,6 +1300,7 @@
         fossilize();
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(mazeCanvas, 0, 0);
         ctx.drawImage(barkCanvas, 0, 0);
 
         // Draw fresh segments
@@ -876,6 +1333,21 @@
           ctx.moveTo(0, 0);
           ctx.quadraticCurveTo(sz * 0.5, -sz * 0.35, sz, 0);
           ctx.quadraticCurveTo(sz * 0.5, sz * 0.35, 0, 0);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Draw moss (persistent, on top of vines)
+        for (let i = 0; i < mossPoints.length; i++) {
+          const m = mossPoints[i];
+          const mx = m.x * dpr;
+          const my = m.y * dpr;
+          const ms = m.size * dpr;
+          ctx.save();
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = `hsl(${m.hue},${m.sat}%,${m.lum}%)`;
+          ctx.beginPath();
+          ctx.arc(mx, my, ms, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         }
@@ -1002,6 +1474,9 @@
         barkCanvas.width = viewport.width * dpr;
         barkCanvas.height = viewport.height * dpr;
 
+        initMaze();
+        renderMazeVisual();
+
         barkCtx.lineCap = "round";
         for (let i = 0; i < fossilIndex; i++) {
           const seg = segments[i];
@@ -1034,6 +1509,16 @@
         pointer.targetY = viewport.height * 0.4;
       }
 
+      function handleScroll() {
+        const scrollY = window.scrollY || 0;
+        if (Math.abs(scrollY - lastScrollY) < 2) return;
+        lastScrollY = scrollY;
+        // Only re-render the lightweight maze layer and collision mask
+        renderMazeVisual();
+        updateTextMask();
+      }
+
+      window.addEventListener("scroll", handleScroll, { passive: true });
       window.addEventListener("resize", resizeCanvas, { passive: true });
       window.addEventListener("mousemove", updateMaskPosition, { passive: true });
       window.addEventListener(
@@ -1048,9 +1533,9 @@
       window.addEventListener("mouseleave", handleLeave);
 
       /* ── Init ── */
+      loadPersisted();
       splitTextToLetters();
       resizeCanvas();
-      updateTextMask();
       spawnSeeds(3 + Math.floor(Math.random() * 3));
       for (let i = 0; i < PREGROW_TICKS; i++) {
         growTick();
