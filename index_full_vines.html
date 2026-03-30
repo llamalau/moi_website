@@ -12,8 +12,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;overflow-x:hidden;background:#ede4d3}
-canvas{position:absolute;top:0;left:0;width:100%}
-#parchment{pointer-events:none}
+canvas{position:absolute;top:0;left:0;width:100%;pointer-events:none}
 #parchment{z-index:0}
 #ink{z-index:1}
 /* Hidden accessible text for screen readers and link clicks */
@@ -205,28 +204,16 @@ function layoutAllText() {
         break;
       }
       case 'entry': {
-        // Split title into words
         mc.font = F.entryTitle();
-        let ex = ml;
-        const espw = mc.measureText(' ').width;
-        for (const w of block.title.split(' ')) {
-          textLines.push({text:w, x:ex, y:cy, font:F.entryTitle(), color:COL.ink, align:'left', type:'word'});
-          ex += mc.measureText(w).width + espw;
-        }
+        textLines.push({text:block.title, x:ml, y:cy, font:F.entryTitle(), color:COL.ink, align:'left', type:'text'});
         if (block.date) {
           mc.font = F.entryDate();
           const dw = mc.measureText(block.date).width;
-          textLines.push({text:block.date, x:ml+maxW-dw, y:cy, font:F.entryDate(), color:COL.inkLight, align:'left', type:'word'});
+          textLines.push({text:block.date, x:ml+maxW-dw, y:cy, font:F.entryDate(), color:COL.inkLight, align:'left', type:'text'});
         }
         cy += 18;
         if (block.role) {
-          mc.font = F.role();
-          let rx = ml;
-          const rspw = mc.measureText(' ').width;
-          for (const w of block.role.split(' ')) {
-            textLines.push({text:w, x:rx, y:cy, font:F.role(), color:COL.inkLight, align:'left', type:'word'});
-            rx += mc.measureText(w).width + rspw;
-          }
+          textLines.push({text:block.role, x:ml, y:cy, font:F.role(), color:COL.inkLight, align:'left', type:'text'});
           cy += 18;
         }
         break;
@@ -241,23 +228,26 @@ function layoutAllText() {
         const lh = fontSize * LINE_GAP;
         const font = isBullet ? F.bullet() : F.body();
         const words = (prefix + block.text).split(' ');
-        let lineX = ml + indent;
+        let line = '';
+        const lineX = ml + indent;
         const lineMaxW = maxW - indent;
-        let curX = lineX;
-        const spaceW = mc.measureText(' ').width;
 
         for (let w = 0; w < words.length; w++) {
+          const test = line ? line + ' ' + words[w] : words[w];
           mc.font = font;
-          const ww = mc.measureText(words[w]).width;
-          if (curX + ww > lineX + lineMaxW && curX > lineX) {
+          if (mc.measureText(test).width > lineMaxW && line) {
+            textLines.push({text:line, x:lineX, y:cy, font:font, color:isBullet?COL.ink:COL.inkMid, align:'left', type:'text'});
             cy += lh;
-            curX = lineX;
+            line = words[w];
+          } else {
+            line = test;
           }
-          // Each word is its own text element
-          textLines.push({text:words[w], x:curX, y:cy, font:font, color:isBullet?COL.ink:COL.inkMid, align:'left', type:'word'});
-          curX += ww + spaceW;
         }
-        cy += lh + 3;
+        if (line) {
+          textLines.push({text:line, x:lineX, y:cy, font:font, color:isBullet?COL.ink:COL.inkMid, align:'left', type:'text'});
+          cy += lh;
+        }
+        cy += 3;
         break;
       }
     }
@@ -291,18 +281,53 @@ function displaceText() {
       }
     }
 
-    // Displace around the WORM segments
-    if (worm) {
-      for (const seg of worm.body) {
-        const wdx = line.x - seg.x;
-        const wdy = line.origY - seg.y;
-        const dist = Math.sqrt(wdx*wdx + wdy*wdy);
-        const radius = seg.r * 3;
-        if (dist < radius && dist > 1) {
-          const force = (1 - dist/radius) * 22;
-          pushX += (wdx/dist) * force;
-          pushY += (wdy/dist) * force;
-        }
+    // Displace around vine growth points
+    for (const v of vineSegments) {
+      const vdx = line.x - v.x;
+      const vdy = line.origY - v.y;
+      const dist = Math.sqrt(vdx*vdx + vdy*vdy);
+      if (dist < 30 && dist > 1) {
+        const force = (1 - dist/30) * 6;
+        pushX += (vdx/dist) * force;
+        pushY += (vdy/dist) * force;
+      }
+    }
+
+    // Displace around growing vine tips (strongest — these are active)
+    for (const t of vineTips) {
+      const tdx = line.x - t.x;
+      const tdy = line.origY - t.y;
+      const dist = Math.sqrt(tdx*tdx + tdy*tdy);
+      if (dist < 40 && dist > 1) {
+        const force = (1 - dist/40) * 12 * t.energy;
+        pushX += (tdx/dist) * force;
+        pushY += (tdy/dist) * force;
+      }
+    }
+
+    // Displace around tendrils (big mutual force — tendrils push text)
+    for (const t of vineTendrils) {
+      const tdx = line.x - t.renderX;
+      const tdy = line.origY - t.renderY;
+      const dist = Math.sqrt(tdx*tdx + tdy*tdy);
+      const radius = t.radius * 2.5;
+      if (dist < radius && dist > 1) {
+        const force = (1 - dist/radius) * 20 * (1 - (t.crush||0) * 0.7);
+        pushX += (tdx/dist) * force;
+        pushY += (tdy/dist) * force;
+      }
+    }
+
+    // Displace around leaves
+    for (const l of vineLeaves) {
+      const ldx = line.x - l.x;
+      const ldy = line.origY - l.y;
+      const dist = Math.sqrt(ldx*ldx + ldy*ldy);
+      const radius = l.size * 2;
+      if (dist < radius && dist > 1) {
+        const force = (1 - dist/radius) * 5;
+        pushX += (ldx/dist) * force;
+        pushY += (ldy/dist) * force;
       }
     }
 
@@ -320,670 +345,188 @@ function displaceText() {
   }
 }
 
-// ─── THE WORM — a great thick serpent that hunts the golden creature ──
+// ─── TENDRIL BEHAVIOR: chase creatures + text crushes them ──
+function displaceTendrils() {
+  for (const t of vineTendrils) {
+    // Pick a target creature to chase (sticky — same one until it's gone)
+    if (!t.target || !creatures.includes(t.target)) {
+      t.target = creatures.length > 0 ? creatures[Math.random()*creatures.length|0] : null;
+    }
+
+    // Chase: slowly move the tendril's base position toward its target creature
+    if (t.target) {
+      const cdx = t.target.x - t.x;
+      const cdy = t.target.y - t.y;
+      const cdist = Math.sqrt(cdx*cdx + cdy*cdy);
+      if (cdist > 5) {
+        const chaseSpeed = 0.35;
+        t.x += (cdx/cdist) * chaseSpeed;
+        t.y += (cdy/cdist) * chaseSpeed;
+      }
+    }
+
+    let pushX = 0, pushY = 0;
+    let nearestGapY = null;
+    let minGapDist = Infinity;
+
+    // Text lines push tendrils away
+    for (let i = 0; i < textLines.length; i++) {
+      const l = textLines[i];
+      if (l.type === 'rule' || !l.text) continue;
+      const ldx = t.x - l.x;
+      const ldy = t.y - l.origY;
+      const dist = Math.sqrt(ldx*ldx + ldy*ldy);
+      const radius = 35;
+      if (dist < radius && dist > 1) {
+        const force = (1 - dist/radius) * 10;
+        pushY += (ldy/dist) * force;
+        pushX += (ldx/dist) * force * 0.3;
+
+        if (i < textLines.length - 1) {
+          const nextL = textLines[i+1];
+          if (nextL.origY && nextL.text) {
+            const gapY = (l.origY + nextL.origY) / 2;
+            const gapDist = Math.abs(t.y - gapY);
+            if (gapDist < minGapDist) { minGapDist = gapDist; nearestGapY = gapY; }
+          }
+        }
+      }
+    }
+
+    // Settle into gap between text lines
+    if (nearestGapY !== null && minGapDist < 40) {
+      pushY += (nearestGapY - t.y) * 0.06;
+    }
+
+    // Crush factor
+    const pushMag = Math.sqrt(pushX*pushX + pushY*pushY);
+    const targetCrush = Math.min(1, pushMag / 12);
+    t.crush += (targetCrush - t.crush) * 0.05;
+
+    const lerp = pushMag > 0.5 ? 0.1 : 0.03;
+    t.dx += (pushX - t.dx) * lerp;
+    t.dy += (pushY - t.dy) * lerp;
+    t.renderX = t.x + t.dx;
+    t.renderY = t.y + t.dy;
+  }
+}
+
+// ─── VINE SYSTEM ────────────────────────────────────────────
+const vinePaths = [];     // completed vine bezier paths
+const vineTips = [];      // active growing tips
+const vineSegments = [];  // point cloud for displacement field
+const vineLeaves = [];
+const vineTendrils = [];
+const MAX_TIPS = 50, MAX_LEAVES = 400, MAX_TENDRILS = 3;
 const INK = [[58,38,18],[85,52,25],[42,65,38],[120,40,20],[45,30,55]];
-let worm = null;
-let goldenCreature = null;
-let lastGoldenSpawn = 0;
-const GOLDEN_INTERVAL = 3600; // ~3 min at 20Hz (3*60*20)
 
-function spawnWorm() {
-  const segs = 35;
-  const body = [];
-  // Start hidden in the left wall
-  const startX = -20, startY = PAGE_H * 0.5;
-  for (let i = 0; i < segs; i++) {
-    const t = i / (segs - 1);
-    // THICC — big radius, fat in middle, tapers at extremes
-    const r = 14 * (0.25 + Math.sin(t * Math.PI) * 0.75);
-    body.push({ x: startX - i * 10, y: startY, r: r });
-  }
-  worm = {
-    body,
-    speed: 0.55,
-    phase: 0,
-    ink: [50, 22, 10],
-    born: tick,
-    state: 'hiding',  // hiding | hunting | returning
-    hideWall: 'left',  // which wall it's hiding in
-    hideTimer: 0,
-  };
+function spawnVine(x, y, angle) {
+  if (vineTips.length >= MAX_TIPS) return;
+  vineTips.push({
+    x,y,angle,energy:1,depth:0,phase:Math.random()*Math.PI*2,
+    dist:0,hue:Math.random()*INK.length|0,clinging:false,clingN:0,
+    path:[{x,y}],thick:2.2+Math.random()*0.8,born:tick,
+  });
 }
 
-function nearestWall(x) {
-  return x < W / 2 ? 'left' : 'right';
+function spawnEdgeSeed(){
+  const side=Math.random()<.5;
+  const x=side?2:W-2;
+  const y=Math.random()*PAGE_H;
+  spawnVine(x,y,side?Math.random()*.8-.4:Math.PI+Math.random()*.8-.4);
 }
 
-function wallX(wall) {
-  return wall === 'left' ? -30 : W + 30;
+function isTextZone(x, y) {
+  // Check if point is near any text line
+  for (const l of textLines) {
+    if (l.type==='rule'||l.type==='gap') continue;
+    if (Math.abs(y - l.origY) < 10 && x > l.x - 20 && x < l.x + 400) return true;
+  }
+  return false;
 }
 
-function spawnGoldenCreature() {
-  if (goldenCreature && creatures.includes(goldenCreature)) return;
-  // Pick an existing creature to become golden, or spawn a new one
-  if (creatures.length > 0 && Math.random() < 0.5) {
-    goldenCreature = creatures[Math.random() * creatures.length | 0];
-  } else {
-    const fromL = Math.random() < 0.5;
-    const x = fromL ? -30 : W + 30;
-    const y = PAGE_H * (0.2 + Math.random() * 0.6);
-    const c = generateCreature(x, y, fromL ? 1 : -1);
-    creatures.push(c);
-    goldenCreature = c;
-  }
-  goldenCreature.isGolden = true;
-  // Override its lifetime so it doesn't flee on its own
-  goldenCreature.lifetime = 999999;
-  goldenCreature.born = tick;
-  lastGoldenSpawn = tick;
-}
+function growVines(){
+  const sunX=ptr.x, sunY=ptr.y+scrollY;
+  const next=[];
 
-function updateWorm() {
-  if (!worm) return;
-  const head = worm.body[0];
-  worm.phase += worm._dragging ? 0.25 : 0.07; // faster phase when thrashing
-
-  // Skip state machine when being dragged — just wiggle
-  if (worm._dragging) {
-    // Decay wiggle intensity smoothly (stays high while held)
-    worm._wiggleIntensity = Math.min(4, (worm._wiggleIntensity || 1) + 0.05);
-    // Chain physics still runs below, so body follows the dragged head
-    // but skip all hunting/hiding logic
-  }
-
-  // Golden creature spawning on timer
-  if (tick - lastGoldenSpawn > GOLDEN_INTERVAL) {
-    if (!goldenCreature || !creatures.includes(goldenCreature)) {
-      spawnGoldenCreature();
+  for(let i=0;i<vineTips.length;i++){
+    const t=vineTips[i];
+    if(t.energy<=0.01)continue;
+    const dx=sunX-t.x,dy=sunY-t.y;
+    const dist=Math.sqrt(dx*dx+dy*dy)+1;
+    // Phototropism
+    let ad=Math.atan2(dy,dx)-t.angle;
+    while(ad>Math.PI)ad-=Math.PI*2;while(ad<-Math.PI)ad+=Math.PI*2;
+    const photo=.15*t.energy*Math.min(1,400/dist);
+    // Grow away from text
+    let textRepel = 0;
+    if (isTextZone(t.x, t.y)) {
+      // Push toward nearest margin
+      const toLeft = t.x - W*TEXT_MARGIN_L;
+      const toRight = (W - W*TEXT_MARGIN_R) - t.x;
+      textRepel = toLeft < toRight ? -0.1 : 0.1;
     }
-  }
+    // Gravitropism
+    const wX=t.x<W/2?0:W;const gT=wX<W/2?0:Math.PI;
+    let gd=gT-t.angle;while(gd>Math.PI)gd-=Math.PI*2;while(gd<-Math.PI)gd+=Math.PI*2;
+    // Wobble
+    t.phase+=.12+Math.random()*.06;
+    t.angle+=ad*photo+gd*.015+Math.sin(t.phase)*.05*t.energy+textRepel;
+    const spd=(1.2+Math.random()*.8)*(1+Math.min(1,250/dist)*.3)*t.energy;
+    let nx=t.x+Math.cos(t.angle)*spd,ny=t.y+Math.sin(t.angle)*spd;
 
-  // State machine (paused while dragged)
-  if (worm._dragging) { /* skip state machine */ }
-  else switch (worm.state) {
-    case 'hiding': {
-      // Lurk in wall, wait for golden creature to appear
-      const tx = wallX(worm.hideWall);
-      const ty = PAGE_H * 0.5;
-      head.x += (tx - head.x) * 0.02;
-      head.y += (ty - head.y) * 0.01 + Math.sin(worm.phase) * 0.2;
-
-      // If golden creature exists, start hunting
-      if (goldenCreature && creatures.includes(goldenCreature)) {
-        worm.state = 'hunting';
-      }
-      break;
+    t.path.push({x:nx,y:ny});
+    // Record segment for displacement field (subsample)
+    if (tick % 3 === 0 && vineSegments.length < 3000) {
+      vineSegments.push({x:nx,y:ny});
     }
-    case 'hunting': {
-      // Chase the golden creature
-      if (!goldenCreature || !creatures.includes(goldenCreature)) {
-        // Target gone — return to wall
-        worm.state = 'returning';
-        worm.hideWall = nearestWall(head.x);
-        break;
-      }
-      const dx = goldenCreature.x - head.x;
-      const dy = goldenCreature.y - head.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+    t.x=nx;t.y=ny;t.dist+=spd;
+    t.energy+=.007*Math.min(1,250/dist)-.002-t.depth*.001;
+    t.energy=Math.max(0,Math.min(1,t.energy));
 
-      head.x += (dx / dist) * worm.speed + Math.sin(worm.phase * 2) * 1.2;
-      head.y += (dy / dist) * worm.speed + Math.cos(worm.phase * 1.7) * 0.8;
-
-      // Catch — begin devour animation
-      if (dist < 20) {
-        worm.state = 'devouring';
-        worm.devourTick = 0;
-        worm.devourTarget = goldenCreature;
-        worm.devourParticles = [];
-        // Burst of gold particles
-        for (let p = 0; p < 20; p++) {
-          const a = Math.random() * Math.PI * 2;
-          const spd = 1 + Math.random() * 3;
-          worm.devourParticles.push({
-            x: goldenCreature.x, y: goldenCreature.y,
-            vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
-            life: 1, size: 1 + Math.random() * 2,
-          });
-        }
-      }
-      break;
+    // Branch
+    if(t.dist>25+Math.random()*10&&t.energy>.12&&vineTips.length+next.length<MAX_TIPS){
+      t.dist=0;const be=t.energy*.4;t.energy*=.7;
+      const side=Math.random()<.5?1:-1;
+      next.push({
+        x:t.x,y:t.y,angle:t.angle+(25+Math.random()*20)*side*Math.PI/180,
+        energy:be,depth:t.depth+1,phase:Math.random()*Math.PI*2,dist:0,
+        hue:(t.hue+1+Math.random()*2|0)%INK.length,clinging:false,clingN:0,
+        path:[{x:t.x,y:t.y}],thick:Math.max(.4,t.thick*.6),born:tick,
+      });
     }
-    case 'devouring': {
-      // Creature shrinks and gets sucked into worm's mouth over 50 ticks
-      worm.devourTick++;
-      const dt = worm.devourTarget;
-      if (dt) {
-        const progress = Math.min(1, worm.devourTick / 50);
-        // Pull creature toward worm head
-        dt.x += (head.x - dt.x) * 0.15;
-        dt.y += (head.y - dt.y) * 0.15;
-        // Shrink
-        dt.scale *= 0.96;
-        dt.devourShrink = progress;
-        // Bulge the worm head during swallow
-        worm.body[0].r = 14 * 0.25 + 14 * 0.75 + Math.sin(progress * Math.PI) * 5;
-        worm.body[1].r = worm.body[1].r * 0.98 + (14 * 0.9 + Math.sin(progress * Math.PI * 0.8) * 3) * 0.02;
-      }
-      // Animate particles
-      for (const p of worm.devourParticles) {
-        p.x += p.vx; p.y += p.vy;
-        p.vx *= 0.95; p.vy *= 0.95;
-        p.life -= 0.025;
-      }
-      // Done
-      if (worm.devourTick >= 50) {
-        if (dt) {
-          const idx = creatures.indexOf(dt);
-          if (idx >= 0) creatures.splice(idx, 1);
-        }
-        goldenCreature = null;
-        worm.state = 'returning';
-        worm.hideWall = nearestWall(head.x);
-        lastGoldenSpawn = tick;
-        // Gulp bulge travels down the body
-        worm.gulpTick = 0;
-      }
-      break;
+    // Leaf
+    if(Math.random()<.04&&vineLeaves.length<MAX_LEAVES){
+      vineLeaves.push({x:t.x,y:t.y,angle:t.angle+(Math.random()-.5)*1.2,
+        size:4+Math.random()*7,lobes:3+(Math.random()*3|0),depth:t.depth,
+        hue:t.hue,born:tick,flip:Math.random()<.5?1:-1});
     }
-    case 'returning': {
-      // Slither back to hide in the wall
-      const tx = wallX(worm.hideWall);
-      const ty = PAGE_H * (0.3 + Math.random() * 0.001); // slight wander
-      const dx = tx - head.x;
-      const dy = ty - head.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) + 1;
-
-      head.x += (dx / dist) * worm.speed * 0.8 + Math.sin(worm.phase * 2) * 0.6;
-      head.y += (dy / dist) * worm.speed * 0.4 + Math.cos(worm.phase * 1.5) * 0.4;
-
-      // Once head is past the wall edge, go back to hiding
-      if ((worm.hideWall === 'left' && head.x < -15) ||
-          (worm.hideWall === 'right' && head.x > W + 15)) {
-        worm.state = 'hiding';
-      }
-      break;
+    // Tendril (rare — fat worm-like chonkers)
+    if(Math.random()<.003&&vineTendrils.length<MAX_TENDRILS){
+      vineTendrils.push({x:t.x,y:t.y,angle:t.angle+(Math.random()-.5)*1.0,
+        turns:2+Math.random()*2.5,radius:20+Math.random()*25,
+        cw:Math.random()<.5?1:-1,depth:t.depth,hue:t.hue,born:tick,
+        dx:0,dy:0,renderX:t.x,renderY:t.y,crush:0,
+        thick:5+Math.random()*3});
     }
-  }
-
-  // Chain physics — each segment follows the one in front
-  for (let i = 1; i < worm.body.length; i++) {
-    const prev = worm.body[i - 1];
-    const seg = worm.body[i];
-    const sdx = prev.x - seg.x;
-    const sdy = prev.y - seg.y;
-    const sdist = Math.sqrt(sdx * sdx + sdy * sdy);
-    const spacing = (prev.r + seg.r) * 0.8;
-    if (sdist > spacing) {
-      const pull = (sdist - spacing) / sdist;
-      seg.x += sdx * pull * 0.55;
-      seg.y += sdy * pull * 0.55;
+    // Die
+    if(t.energy<.04){
+      vinePaths.push({path:t.path,thick:t.thick,depth:t.depth,hue:t.hue,born:t.born});
+      if(vineTendrils.length<MAX_TENDRILS) vineTendrils.push({x:t.x,y:t.y,angle:t.angle,turns:2+Math.random()*2,radius:22+Math.random()*20,cw:Math.random()<.5?1:-1,depth:t.depth,hue:t.hue,born:tick,dx:0,dy:0,renderX:t.x,renderY:t.y,crush:0,thick:5+Math.random()*3});
+      continue;
     }
-    // Lateral undulation — cranked when dragged
-    // Decay wiggle back to normal when not dragged
-    if (!worm._dragging && worm._wiggleIntensity > 1) {
-      worm._wiggleIntensity = Math.max(1, worm._wiggleIntensity - 0.03);
-    }
-    const wiggle = worm._wiggleIntensity || 1;
-    const wave = Math.sin(worm.phase * (1 + wiggle) + i * 0.3) * seg.r * 0.35 * wiggle;
-    const perpX = -sdy / (sdist + 0.01);
-    const perpY = sdx / (sdist + 0.01);
-    seg.x += perpX * wave * 0.12;
-    seg.y += perpY * wave * 0.12;
-    // Extra frantic jitter when being held
-    if (wiggle > 1.5) {
-      seg.x += (Math.random() - 0.5) * wiggle * 1.5;
-      seg.y += (Math.random() - 0.5) * wiggle * 1.5;
-    }
+    if(t.x>-40&&t.x<W+40&&t.y>-40&&t.y<PAGE_H+40)next.push(t);
+    else vinePaths.push({path:t.path,thick:t.thick,depth:t.depth,hue:t.hue,born:t.born});
   }
-
-  // Gulp bulge traveling down the body after devouring
-  if (worm.gulpTick !== undefined && worm.gulpTick < worm.body.length * 2) {
-    worm.gulpTick++;
-    const bulgePos = worm.gulpTick / 2; // which segment the bulge is at
-    for (let i = 0; i < worm.body.length; i++) {
-      const dist = Math.abs(i - bulgePos);
-      if (dist < 3) {
-        const bulge = (1 - dist / 3) * 4;
-        worm.body[i].r += bulge * Math.sin(worm.gulpTick * 0.3);
-      }
-    }
-    if (worm.gulpTick >= worm.body.length * 2) worm.gulpTick = undefined;
-  }
-}
-
-function drawWorm() {
-  if (!worm) return;
-  const col = worm.ink;
-  const yOff = -scrollY;
-
-  X.save();
-  X.lineCap = 'round';
-  X.lineJoin = 'round';
-
-  const body = worm.body;
-
-  // Body contour — smooth filled shape
-  X.beginPath();
-  // Top edge
-  for (let i = 0; i < body.length; i++) {
-    const s = body[i];
-    const px = s.x * DPR, py = (s.y + yOff) * DPR;
-    const angle = i < body.length - 1
-      ? Math.atan2(body[i+1].y - s.y, body[i+1].x - s.x)
-      : Math.atan2(s.y - body[i-1].y, s.x - body[i-1].x);
-    const nx = -Math.sin(angle) * s.r * DPR;
-    const ny = Math.cos(angle) * s.r * DPR;
-    if (i === 0) X.moveTo(px + nx, py + ny);
-    else X.lineTo(px + nx, py + ny);
-  }
-  // Bottom edge (reverse)
-  for (let i = body.length - 1; i >= 0; i--) {
-    const s = body[i];
-    const px = s.x * DPR, py = (s.y + yOff) * DPR;
-    const angle = i < body.length - 1
-      ? Math.atan2(body[i+1].y - s.y, body[i+1].x - s.x)
-      : Math.atan2(s.y - body[i-1].y, s.x - body[i-1].x);
-    const nx = -Math.sin(angle) * s.r * DPR;
-    const ny = Math.cos(angle) * s.r * DPR;
-    X.lineTo(px - nx, py - ny);
-  }
-  X.closePath();
-
-  // Dark menacing fill
-  X.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},0.25)`;
-  X.fill();
-  X.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},0.85)`;
-  X.lineWidth = 1.5 * DPR;
-  X.stroke();
-
-  // Segment rings (muscle bands)
-  X.globalAlpha = 0.12;
-  for (let i = 2; i < body.length - 1; i += 2) {
-    const s = body[i];
-    const px = s.x * DPR, py = (s.y + yOff) * DPR;
-    const angle = Math.atan2(body[i+1].y - body[i-1].y, body[i+1].x - body[i-1].x);
-    const nx = Math.cos(angle + Math.PI/2) * s.r * DPR;
-    const ny = Math.sin(angle + Math.PI/2) * s.r * DPR;
-    X.beginPath();
-    X.moveTo(px - nx, py - ny);
-    X.lineTo(px + nx, py + ny);
-    X.stroke();
-  }
-  X.globalAlpha = 1;
-
-  // Head — menacing with eyes and mouth
-  const h = body[0];
-  const h1 = body[1];
-  const headAngle = Math.atan2(h.y - h1.y, h.x - h1.x);
-  const hx = h.x * DPR, hy = (h.y + yOff) * DPR;
-  const hr = h.r * DPR * 1.3;
-
-  // Head shape
-  X.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},0.3)`;
-  X.beginPath();
-  X.ellipse(hx + Math.cos(headAngle) * hr * 0.3, hy + Math.sin(headAngle) * hr * 0.3,
-    hr, hr * 0.7, headAngle, 0, Math.PI * 2);
-  X.fill();
-  X.stroke();
-
-  // Eyes — two glowing points
-  const eyeOff = hr * 0.4;
-  const perpA = headAngle + Math.PI / 2;
-  for (const side of [-1, 1]) {
-    const ex = hx + Math.cos(headAngle) * hr * 0.4 + Math.cos(perpA) * eyeOff * side * 0.5;
-    const ey = hy + Math.sin(headAngle) * hr * 0.4 + Math.sin(perpA) * eyeOff * side * 0.5;
-    // Glow
-    X.fillStyle = 'rgba(180,40,20,0.4)';
-    X.beginPath(); X.arc(ex, ey, 3 * DPR, 0, Math.PI * 2); X.fill();
-    // Pupil
-    X.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},0.9)`;
-    X.beginPath(); X.arc(ex, ey, 1.5 * DPR, 0, Math.PI * 2); X.fill();
-  }
-
-  // Mouth — open maw pointing forward
-  const mx = hx + Math.cos(headAngle) * hr * 0.9;
-  const my = hy + Math.sin(headAngle) * hr * 0.9;
-  X.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},0.7)`;
-  X.lineWidth = 1.2 * DPR;
-  X.beginPath();
-  X.arc(mx, my, hr * 0.3, headAngle - 0.8, headAngle + 0.8);
-  X.stroke();
-  // Tiny teeth
-  for (let t = -2; t <= 2; t++) {
-    const ta = headAngle + t * 0.3;
-    X.beginPath();
-    X.moveTo(mx + Math.cos(ta) * hr * 0.25, my + Math.sin(ta) * hr * 0.25);
-    X.lineTo(mx + Math.cos(ta) * hr * 0.45, my + Math.sin(ta) * hr * 0.45);
-    X.stroke();
-  }
-
-  // Devour particles (gold burst when eating)
-  if (worm.devourParticles) {
-    for (const p of worm.devourParticles) {
-      if (p.life <= 0) continue;
-      X.globalAlpha = p.life * 0.7;
-      X.fillStyle = `rgb(${220+30*p.life|0},${200+40*p.life|0},${60+40*p.life|0})`;
-      X.beginPath();
-      X.arc(p.x * DPR, (p.y + yOff) * DPR, p.size * DPR * p.life, 0, Math.PI * 2);
-      X.fill();
-    }
-    X.globalAlpha = 1;
-  }
-
-  X.restore();
-}
-
-/* vine system disabled — saved in index_full_vines.html */
-
-// ═══════════════════════════════════════════════════════════
-// ECOSYSTEM — food chain, boids, aging, breeding
-// ═══════════════════════════════════════════════════════════
-const ECO = {
-  MAX_CREATURES: 50,
-  SOFT_CAPS: {carnivore:5, herbivore:10, flock:15, scavenger:4},
-  MAX_FOOD: 80,
-  ENERGY: {idle:.01,walk:.015,chase:.05,flee:.04,flock:.012},
-  GAIN: {ink_mote:8,text_crumb:12,corpse_mote:15,kill:30},
-  BREED_ENERGY: 70, BREED_COST: 25, BREED_COOLDOWN: 800, BREED_DIST: 25,
-  FLOCK_RADIUS: 60, SEP_DIST: 15,
-  SCAN_RADIUS: 150, STRIKE_DIST: 40, CATCH_DIST: 12,
-  FEAR_RADIUS: 100, WORM_FEAR: 150,
-  BOIDS: {sep:1.5,align:1.0,coh:1.0,avoid:3.0},
-  MAX_AGE: {carnivore:[6000,10000],herbivore:[4000,8000],flock:[3000,5000],scavenger:[5000,7000]},
-  FOOD_LIFE: {ink_mote:600,text_crumb:400,corpse_mote:400},
-};
-
-// ─── FOOD ITEMS (ink motes, text crumbs, corpses) ───────────
-const foodItems = [];
-const ROLES = ['carnivore','herbivore','flock','scavenger'];
-
-function spawnFood() {
-  if (foodItems.length >= ECO.MAX_FOOD) return;
-  // Ink motes in margins
-  if (tick % 15 === 0) {
-    const side = Math.random() < 0.5;
-    const x = side ? W * Math.random() * 0.15 : W * (0.85 + Math.random() * 0.15);
-    foodItems.push({x, y: Math.random() * PAGE_H, type:'ink_mote', energy:8, born:tick, life:600, size:1+Math.random()});
-  }
-  // Text crumbs near text
-  if (tick % 30 === 0 && textLines.length > 0) {
-    const l = textLines[Math.random() * textLines.length | 0];
-    if (l.origY) foodItems.push({x:l.x + Math.random()*200, y:l.origY + (Math.random()-0.5)*8, type:'text_crumb', energy:12, born:tick, life:400, size:1.5});
-  }
-  // Expire old food
-  for (let i = foodItems.length-1; i >= 0; i--) {
-    if (tick - foodItems[i].born > foodItems[i].life) foodItems.splice(i, 1);
-  }
-}
-
-function spawnCorpse(x, y) {
-  const n = 3 + Math.random() * 5 | 0;
-  for (let i = 0; i < n && foodItems.length < ECO.MAX_FOOD; i++) {
-    foodItems.push({x: x+(Math.random()-0.5)*15, y: y+(Math.random()-0.5)*15, type:'corpse_mote', energy:15, born:tick, life:400, size:1.5+Math.random()});
-  }
-}
-
-function eatNearby(c, types, radius) {
-  for (let i = foodItems.length-1; i >= 0; i--) {
-    const f = foodItems[i];
-    if (!types.includes(f.type)) continue;
-    const d = Math.sqrt((c.x-f.x)**2+(c.y-f.y)**2);
-    if (d < radius) { c.energy = Math.min(100, c.energy + f.energy); foodItems.splice(i, 1); return f; }
-  }
-  return null;
-}
-
-function nearestFood(c, types, radius) {
-  let best = null, bestD = radius;
-  for (const f of foodItems) {
-    if (!types.includes(f.type)) continue;
-    const d = Math.sqrt((c.x-f.x)**2+(c.y-f.y)**2);
-    if (d < bestD) { bestD = d; best = f; }
-  }
-  return best;
-}
-
-// ─── SPATIAL GRID for neighbor queries ──────────────────────
-const CELL = 100;
-let grid = {};
-function rebuildGrid() {
-  grid = {};
-  for (const c of creatures) {
-    const k = `${c.x/CELL|0},${c.y/CELL|0}`;
-    (grid[k] || (grid[k] = [])).push(c);
-  }
-}
-function nearby(x, y, r) {
-  const res = [], rc = Math.ceil(r/CELL);
-  const cx = x/CELL|0, cy = y/CELL|0;
-  for (let dx=-rc;dx<=rc;dx++) for (let dy=-rc;dy<=rc;dy++) {
-    const cell = grid[`${cx+dx},${cy+dy}`];
-    if (cell) for (const c of cell) {
-      const d = Math.sqrt((c.x-x)**2+(c.y-y)**2);
-      if (d < r) res.push({c, d});
-    }
-  }
-  return res;
-}
-
-// ─── BOIDS (flock behavior) ─────────────────────────────────
-let nextFlockId = 0;
-function updateFlock(c) {
-  const B = ECO.BOIDS;
-  let sepX=0,sepY=0,alignVx=0,alignVy=0,cohX=0,cohY=0,n=0;
-  const nbrs = nearby(c.x, c.y, ECO.FLOCK_RADIUS);
-
-  for (const {c:o,d} of nbrs) {
-    if (o === c || o.flockId !== c.flockId) continue;
-    n++;
-    // Separation
-    if (d < ECO.SEP_DIST && d > 0.1) { sepX += (c.x-o.x)/d; sepY += (c.y-o.y)/d; }
-    // Alignment
-    alignVx += o.vx||0; alignVy += o.vy||0;
-    // Cohesion
-    cohX += o.x; cohY += o.y;
-  }
-  if (n > 0) {
-    alignVx /= n; alignVy /= n;
-    cohX = cohX/n - c.x; cohY = cohY/n - c.y;
-  }
-
-  // Predator avoidance
-  let avoidX=0, avoidY=0;
-  for (const {c:o,d} of nbrs) {
-    if (o.role === 'carnivore' && d < ECO.FEAR_RADIUS) {
-      const f = (1 - d/ECO.FEAR_RADIUS) * B.avoid;
-      avoidX += (c.x-o.x)/d * f; avoidY += (c.y-o.y)/d * f;
-    }
-  }
-  // Worm fear
-  if (worm) {
-    const wh = worm.body[0];
-    const wd = Math.sqrt((c.x-wh.x)**2+(c.y-wh.y)**2);
-    if (wd < ECO.WORM_FEAR && wd > 1) {
-      avoidX += (c.x-wh.x)/wd * 4; avoidY += (c.y-wh.y)/wd * 4;
-    }
-  }
-
-  const spd = c.baseSpeed * (c.agePhase==='elder'?0.7:c.agePhase==='juvenile'?1.2:1);
-  c.vx += (sepX*B.sep + (alignVx-c.vx)*B.align*0.1 + cohX*B.coh*0.01 + avoidX) * 0.1;
-  c.vy += (sepY*B.sep + (alignVy-c.vy)*B.align*0.1 + cohY*B.coh*0.01 + avoidY) * 0.1;
-  const vmag = Math.sqrt(c.vx**2+c.vy**2);
-  if (vmag > spd) { c.vx = c.vx/vmag*spd; c.vy = c.vy/vmag*spd; }
-  c.energy -= ECO.ENERGY.flock;
-  eatNearby(c, ['ink_mote','text_crumb'], 10);
-}
-
-// ─── CARNIVORE HUNTING ──────────────────────────────────────
-function updateCarnivore(c) {
-  const spd = c.baseSpeed * (c.agePhase==='elder'?0.7:1);
-  switch (c.behaviorState) {
-    case 'patrol': {
-      c.vx += (Math.random()-0.5)*0.1; c.vy += (Math.random()-0.5)*0.1;
-      const vm = Math.sqrt(c.vx**2+c.vy**2);
-      if (vm > spd*0.5) { c.vx=c.vx/vm*spd*0.5; c.vy=c.vy/vm*spd*0.5; }
-      c.energy -= ECO.ENERGY.walk;
-      // Scan for prey
-      const prey = nearby(c.x, c.y, ECO.SCAN_RADIUS).filter(n => n.c !== c && (n.c.role==='herbivore'||n.c.role==='flock'));
-      if (prey.length > 0) { c.target = prey[0].c; c.behaviorState = 'stalk'; c.behaviorTimer = 0; }
-      if (c.behaviorTimer++ > 200) { c.vx = -c.vx; c.behaviorTimer = 0; }
-      break;
-    }
-    case 'stalk': {
-      if (!c.target || !creatures.includes(c.target)) { c.behaviorState='patrol'; c.target=null; break; }
-      const dx=c.target.x-c.x, dy=c.target.y-c.y, d=Math.sqrt(dx*dx+dy*dy)+1;
-      c.vx += dx/d*0.03; c.vy += dy/d*0.03;
-      const vm=Math.sqrt(c.vx**2+c.vy**2);
-      if(vm>spd*0.4){c.vx=c.vx/vm*spd*0.4;c.vy=c.vy/vm*spd*0.4;}
-      c.energy -= ECO.ENERGY.walk;
-      if (d < ECO.STRIKE_DIST) { c.behaviorState='chase'; c.behaviorTimer=0; }
-      if (d > ECO.SCAN_RADIUS*2) { c.behaviorState='patrol'; c.target=null; }
-      break;
-    }
-    case 'chase': {
-      if (!c.target || !creatures.includes(c.target)) { c.behaviorState='patrol'; c.target=null; break; }
-      const dx=c.target.x-c.x, dy=c.target.y-c.y, d=Math.sqrt(dx*dx+dy*dy)+1;
-      c.vx = dx/d*spd*2; c.vy = dy/d*spd*2;
-      c.energy -= ECO.ENERGY.chase;
-      if (d < ECO.CATCH_DIST) {
-        // Kill prey
-        const idx = creatures.indexOf(c.target);
-        if (idx >= 0) { spawnCorpse(c.target.x, c.target.y); creatures.splice(idx, 1); }
-        c.energy = Math.min(100, c.energy + ECO.GAIN.kill);
-        c.behaviorState='rest'; c.behaviorTimer=0; c.target=null;
-      }
-      if (c.behaviorTimer++ > 100) { c.behaviorState='rest'; c.behaviorTimer=0; c.target=null; }
-      break;
-    }
-    case 'rest': {
-      c.vx *= 0.9; c.vy *= 0.9;
-      c.energy -= ECO.ENERGY.idle;
-      if (c.behaviorTimer++ > 80) { c.behaviorState='patrol'; c.behaviorTimer=0; }
-      break;
-    }
-    default: c.behaviorState='patrol';
-  }
-}
-
-// ─── HERBIVORE GRAZING ──────────────────────────────────────
-function updateHerbivore(c) {
-  const spd = c.baseSpeed * (c.agePhase==='elder'?0.7:c.agePhase==='juvenile'?1.2:1);
-  // Flee predators
-  const threats = nearby(c.x, c.y, ECO.FEAR_RADIUS).filter(n => n.c.role==='carnivore');
-  if (threats.length > 0) {
-    const t = threats[0];
-    c.vx = (c.x-t.c.x)/t.d * spd*2; c.vy = (c.y-t.c.y)/t.d * spd*2;
-    c.energy -= ECO.ENERGY.flee;
-    // Alarm cascade — nearby herbivores also flee
-    for (const {c:o} of nearby(c.x, c.y, 80)) {
-      if (o.role === 'herbivore' && o !== c) { o.vx += c.vx*0.3; o.vy += c.vy*0.3; }
-    }
-    return;
-  }
-  // Worm flee
-  if (worm && worm.state === 'hunting') {
-    const wh=worm.body[0], wd=Math.sqrt((c.x-wh.x)**2+(c.y-wh.y)**2);
-    if (wd < ECO.WORM_FEAR) { c.vx=(c.x-wh.x)/wd*spd*2; c.vy=(c.y-wh.y)/wd*spd*2; c.energy-=ECO.ENERGY.flee; return; }
-  }
-  // Eat
-  eatNearby(c, ['ink_mote','text_crumb'], 10);
-  // Seek food
-  const food = nearestFood(c, ['ink_mote','text_crumb'], 80);
-  if (food) {
-    const dx=food.x-c.x, dy=food.y-c.y, d=Math.sqrt(dx*dx+dy*dy)+1;
-    c.vx += dx/d*0.05; c.vy += dy/d*0.05;
-  } else {
-    c.vx += (Math.random()-0.5)*0.08; c.vy += (Math.random()-0.5)*0.08;
-  }
-  const vm=Math.sqrt(c.vx**2+c.vy**2);
-  if(vm>spd){c.vx=c.vx/vm*spd;c.vy=c.vy/vm*spd;}
-  c.energy -= ECO.ENERGY.walk;
-}
-
-// ─── SCAVENGER ──────────────────────────────────────────────
-function updateScavenger(c) {
-  const spd = c.baseSpeed * 0.8;
-  // Flee everything except other scavengers
-  const threats = nearby(c.x, c.y, 60).filter(n => n.c!==c && n.c.role!=='scavenger');
-  if (threats.length > 1) {
-    const t = threats[0];
-    c.vx = (c.x-t.c.x)/t.d*spd; c.vy = (c.y-t.c.y)/t.d*spd;
-    c.energy -= ECO.ENERGY.flee;
-    return;
-  }
-  eatNearby(c, ['corpse_mote','ink_mote'], 10);
-  const food = nearestFood(c, ['corpse_mote','ink_mote'], 100);
-  if (food) {
-    const dx=food.x-c.x, dy=food.y-c.y, d=Math.sqrt(dx*dx+dy*dy)+1;
-    c.vx += dx/d*0.04; c.vy += dy/d*0.04;
-  } else {
-    c.vx += (Math.random()-0.5)*0.06; c.vy += (Math.random()-0.5)*0.06;
-  }
-  const vm=Math.sqrt(c.vx**2+c.vy**2);
-  if(vm>spd){c.vx=c.vx/vm*spd;c.vy=c.vy/vm*spd;}
-  c.energy -= ECO.ENERGY.walk;
-}
-
-// ─── BREEDING ───────────────────────────────────────────────
-function checkBreeding() {
-  if (creatures.length >= ECO.MAX_CREATURES) return;
-  for (let i = 0; i < creatures.length; i++) {
-    const a = creatures[i];
-    if (a.agePhase !== 'adult' || a.energy < ECO.BREED_ENERGY || a.breedCooldown > tick) continue;
-    for (let j = i+1; j < creatures.length; j++) {
-      const b = creatures[j];
-      if (b.role !== a.role || b.agePhase !== 'adult' || b.energy < ECO.BREED_ENERGY || b.breedCooldown > tick) continue;
-      if (b.isGolden || a.isGolden) continue;
-      const d = Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2);
-      if (d > ECO.BREED_DIST) continue;
-      // Check role cap
-      const roleCount = creatures.filter(c=>c.role===a.role).length;
-      if (roleCount >= (ECO.SOFT_CAPS[a.role]||10)) continue;
-      // Breed!
-      a.energy -= ECO.BREED_COST; b.energy -= ECO.BREED_COST;
-      a.breedCooldown = tick + ECO.BREED_COOLDOWN;
-      b.breedCooldown = tick + ECO.BREED_COOLDOWN;
-      const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
-      const child = generateCreature(mx, my, Math.random()<0.5?1:-1, a.role);
-      // Inherit traits from parents with variation
-      child.headType = Math.random()<0.5 ? a.headType : b.headType;
-      if (Math.random()<0.1) child.headType = HEAD_TYPES[Math.random()*HEAD_TYPES.length|0]; // mutation
-      child.decor = Math.random()<0.5 ? a.decor : b.decor;
-      child.energy = 35;
-      child.scale *= 0.5; // born small
-      if (a.role === 'flock') child.flockId = a.flockId;
-      creatures.push(child);
-      return; // one birth per tick
-    }
-  }
-}
-
-// ─── FOOD DRAWING ───────────────────────────────────────────
-function renderFood() {
-  for (const f of foodItems) {
-    const fy = (f.y - scrollY) * DPR;
-    if (fy < -10 || fy > H * DPR + 10) continue;
-    const fx = f.x * DPR;
-    const lifeFrac = 1 - (tick - f.born) / f.life;
-    const alpha = lifeFrac * 0.3;
-    if (f.type === 'ink_mote') {
-      X.fillStyle = `rgba(30,22,14,${alpha})`;
-      X.beginPath(); X.arc(fx, fy, f.size * DPR, 0, Math.PI * 2); X.fill();
-    } else if (f.type === 'text_crumb') {
-      X.fillStyle = `rgba(60,46,31,${alpha * 0.8})`;
-      X.fillRect(fx - DPR, fy - DPR * 0.5, DPR * 2, DPR);
-    } else if (f.type === 'corpse_mote') {
-      X.fillStyle = `rgba(85,52,25,${alpha * 0.6})`;
-      X.beginPath(); X.arc(fx, fy, (f.size + 0.5) * DPR, 0, Math.PI * 2); X.fill();
-    }
-  }
+  vineTips.length=0;vineTips.push(...next);
+  if(vineTips.length<4&&tick%50===0)spawnEdgeSeed();
 }
 
 // ─── PROCEDURAL CREATURES ───────────────────────────────────
 // Inspired by: medieval bestiaries, microbiology, deep-sea life,
 // mythology (Greek, Hindu, Norse, Egyptian), Bosch, Dürer, Escher
 const creatures = [];
-const MAX_CREATURES = ECO.MAX_CREATURES;
+const MAX_CREATURES = 14;
 let lastSpawn = -200;
 
 // Heads: medieval + biological + mythological
@@ -1006,27 +549,9 @@ const LIMB_SETS = {
 // Surface decorations
 const DECOR = ['plain','scaled','hatched','spotted','striped','spined','ciliated'];
 
-// Role→trait affinities
-const ROLE_HEADS = {
-  carnivore: ['canine','reptile','anglerfish','oni','anubis'],
-  herbivore: ['human','sphinx','nautilus','diatom','amoeba','cyclops'],
-  flock: ['avian','fish','insect'],
-  scavenger: ['insect','jellyfish','medusa'],
-};
-const ROLE_BODIES = {
-  carnivore: ['serpent','quadruped'],
-  herbivore: ['quadruped','blob','radial','centipede'],
-  flock: ['biped','serpent'],
-  scavenger: ['centipede','blob'],
-};
-
-function generateCreature(x, y, dir, forceRole) {
-  // Assign role
-  const role = forceRole || ROLES[Math.random()*ROLES.length|0];
-  const roleHeads = ROLE_HEADS[role] || HEAD_TYPES;
-  const roleBodies = ROLE_BODIES[role] || BODY_TYPES;
-  const bodyType = roleBodies[Math.random()*roleBodies.length|0];
-  const headType = roleHeads[Math.random()*roleHeads.length|0];
+function generateCreature(x, y, dir) {
+  const bodyType = BODY_TYPES[Math.random()*BODY_TYPES.length|0];
+  const headType = HEAD_TYPES[Math.random()*HEAD_TYPES.length|0];
   const decor = DECOR[Math.random()*DECOR.length|0];
   const segs = bodyType==='serpent' ? 8+Math.random()*6|0
              : bodyType==='centipede' ? 10+Math.random()*8|0
@@ -1086,113 +611,47 @@ function generateCreature(x, y, dir, forceRole) {
     tailLen: bodyType==='serpent'||bodyType==='radial' ? 0 : 6+Math.random()*14,
     hornLen: hasHorns ? 4+Math.random()*10 : 0,
     hasAntennae, hasCrown, hasGlow, hasShell, numEyes,
-    // Ecosystem
-    role,
-    energy: role==='carnivore'?70:role==='herbivore'?50:role==='flock'?40:45,
-    maxAge: (ECO.MAX_AGE[role]||[4000,8000]).reduce((a,b)=>a+Math.random()*(b-a)),
-    birthTick: tick,
-    agePhase: 'juvenile', ageScale: 0.5,
-    breedCooldown: tick + 400,
-    flockId: role==='flock' ? nextFlockId++ : null,
-    target: null,
-    behaviorState: role==='carnivore' ? 'patrol' : 'wander',
-    behaviorTimer: 0,
-    vx: dir * (0.1 + Math.random() * 0.2),
-    vy: (Math.random() - 0.5) * 0.1,
-    baseSpeed: 0.15 + Math.random() * 0.3,
   };
 }
 
 function updateCreatures(){
-  rebuildGrid();
-  spawnFood();
-
-  // Role-aware spawning
-  if(tick-lastSpawn>180 && creatures.length < MAX_CREATURES * 0.7){
-    // Find the role most under its soft cap
-    let bestRole='herbivore', bestDeficit=0;
-    for(const r of ROLES){
-      const count=creatures.filter(c=>c.role===r).length;
-      const deficit=(ECO.SOFT_CAPS[r]||5)-count;
-      if(deficit>bestDeficit){bestDeficit=deficit;bestRole=r;}
-    }
+  if(tick-lastSpawn>200&&creatures.length<MAX_CREATURES){
     const fromL=Math.random()<.5;
     const x=fromL?-30:W+30;
-    const y=PAGE_H*(.1+Math.random()*.8);
-    const c=generateCreature(x,y,fromL?1:-1,bestRole);
-    // Assign flocks together
-    if(c.role==='flock'){
-      const existingFlock=creatures.find(o=>o.role==='flock'&&o.flockId!==null);
-      if(existingFlock && creatures.filter(o=>o.flockId===existingFlock.flockId).length<7)
-        c.flockId=existingFlock.flockId;
-    }
-    creatures.push(c);
+    const yBias=Math.random();
+    const y=yBias<.3?PAGE_H*(.05+Math.random()*.15):yBias>.7?PAGE_H*(.8+Math.random()*.15):PAGE_H*(.2+Math.random()*.6);
+    creatures.push(generateCreature(x,y,fromL?1:-1));
     lastSpawn=tick;
   }
-
   for(let i=creatures.length-1;i>=0;i--){
     const c=creatures[i];
-    // Aging
-    const age=tick-c.birthTick;
-    const ageFrac=age/(c.maxAge||6000);
-    c.agePhase=ageFrac<.15?'juvenile':ageFrac<.7?'adult':'elder';
-    c.ageScale=c.agePhase==='juvenile'?0.5+(ageFrac/0.15)*0.5
-              :c.agePhase==='elder'?0.95-(ageFrac-0.7)*0.15:1.0;
-
-    // Death: old age or starvation
-    if(age>c.maxAge || c.energy<=0){
-      if(!c.isGolden){ spawnCorpse(c.x,c.y); creatures.splice(i,1); continue; }
+    c.timer++;c.walkPhase+=c.speed*.12;c.idlePhase+=.04;
+    const dx=ptr.x-c.x,dy=(ptr.y+scrollY)-c.y;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    if(tick-c.born>c.lifetime)c.state='flee';
+    switch(c.state){
+      case'walk':c.x+=c.dir*c.speed;c.y+=Math.sin(c.idlePhase)*.1;
+        if(dist<120){c.state='curious';c.timer=0}
+        if(c.timer>300&&Math.random()<.01){c.state='idle';c.timer=0}break;
+      case'idle':c.y+=Math.sin(c.idlePhase)*.08;
+        if(dist<120){c.state='curious';c.timer=0}
+        if(c.timer>200){c.state='walk';c.timer=0;c.dir=Math.random()<.5?1:-1}break;
+      case'curious':c.dir=dx>0?1:-1;
+        if(dist>50&&dist<120)c.x+=Math.sign(dx)*.1;
+        if(dist<30){c.state='flee';c.timer=0}
+        if(dist>200){c.state='idle';c.timer=0}break;
+      case'flee':c.x+=(c.x<W/2?-1:1)*c.speed*2.5;
+        c.y+=Math.sin(c.walkPhase*2)*.3;break;
     }
-
-    // Update animation params from velocity
-    c.walkPhase+=Math.sqrt(c.vx**2+c.vy**2)*0.08;
-    c.idlePhase+=0.04;
-    c.dir=c.vx>=0?1:-1;
-    c.speed=Math.sqrt(c.vx**2+c.vy**2);
-
-    // Skip behavior if being dragged
-    if(c._dragging) continue;
-
-    // Role-specific behavior
-    if(!c.isGolden){
-      switch(c.role){
-        case'carnivore':updateCarnivore(c);break;
-        case'herbivore':updateHerbivore(c);break;
-        case'flock':updateFlock(c);break;
-        case'scavenger':updateScavenger(c);break;
-      }
-    } else {
-      // Golden creature just wanders peacefully
-      c.vx+=(Math.random()-.5)*.05; c.vy+=(Math.random()-.5)*.05;
-      const vm=Math.sqrt(c.vx**2+c.vy**2);
-      if(vm>.3){c.vx=c.vx/vm*.3;c.vy=c.vy/vm*.3;}
-      c.energy=50; // golden doesn't starve
-    }
-
-    // Apply velocity
-    c.x+=c.vx; c.y+=c.vy;
-
-    // Boundary soft push
-    if(c.x<20)c.vx+=0.05; if(c.x>W-20)c.vx-=0.05;
-    if(c.y<20)c.vy+=0.05; if(c.y>PAGE_H-20)c.vy-=0.05;
-
-    // Off-screen removal
-    if(c.x<-100||c.x>W+100||c.y<-100||c.y>PAGE_H+100)creatures.splice(i,1);
+    if(c.state==='flee'&&(c.x<-80||c.x>W+80))creatures.splice(i,1);
   }
-
-  // Breeding (every 10 ticks)
-  if(tick%10===0)checkBreeding();
 }
 
 function drawCreature(c){
-  const s=c.scale*(c.ageScale||1)*DPR;
-  const col=c.isGolden ? [184,149,47] : c.ink;
-  const ink=c.isGolden
-    ? `rgba(160,130,30,0.9)`
-    : `rgba(${col[0]},${col[1]},${col[2]},0.8)`;
-  const inkFill=c.isGolden
-    ? `rgba(220,200,80,0.25)`
-    : `rgba(${col[0]},${col[1]},${col[2]},0.15)`;
+  const s=c.scale*DPR;
+  const col=c.ink;
+  const ink=`rgba(${col[0]},${col[1]},${col[2]},0.8)`;
+  const inkFill=`rgba(${col[0]},${col[1]},${col[2]},0.15)`;
   const inkMid=`rgba(${col[0]},${col[1]},${col[2]},0.35)`;
   const walk=Math.sin(c.walkPhase);
   const idle=Math.sin(c.idlePhase);
@@ -1201,17 +660,6 @@ function drawCreature(c){
   X.save();
   X.translate(c.x*DPR,(c.y+yOff)*DPR);
   X.scale(c.dir,1);
-
-  // Golden creature aura
-  if (c.isGolden) {
-    const glowR = c.size * DPR * 2;
-    const shimmer = 0.15 + 0.08 * Math.sin(frame * 0.06);
-    X.globalAlpha = shimmer;
-    X.fillStyle = `rgba(220,200,80,1)`;
-    X.beginPath(); X.arc(0, 0, glowR, 0, Math.PI * 2); X.fill();
-    X.globalAlpha = 1;
-  }
-
   X.strokeStyle=ink;X.fillStyle=inkFill;
   X.lineWidth=1.1*DPR;X.lineCap='round';X.lineJoin='round';
 
@@ -1681,15 +1129,13 @@ function drawCreature(c){
   X.restore();
 }
 
-// ─── GOLD SHIMMER (follows golden creature) ─────────────────
+// ─── GOLD SHIMMER ───────────────────────────────────────────
 const goldMotes=[];const MAX_GOLD=120;
 function updateGold(){
-  // Gold motes trail behind the golden creature
-  if(goldMotes.length<MAX_GOLD&&goldenCreature&&creatures.includes(goldenCreature)&&tick%4===0){
-    goldMotes.push({
-      x:goldenCreature.x+(Math.random()-.5)*goldenCreature.size,
-      y:goldenCreature.y+(Math.random()-.5)*goldenCreature.size,
-      size:.5+Math.random()*2,phase:Math.random()*Math.PI*2,born:tick,life:300+Math.random()*300});
+  if(goldMotes.length<MAX_GOLD&&vineLeaves.length>3&&tick%8===0){
+    const l=vineLeaves[Math.random()*vineLeaves.length|0];
+    goldMotes.push({x:l.x+(Math.random()-.5)*8,y:l.y+(Math.random()-.5)*8,
+      size:.5+Math.random()*1.5,phase:Math.random()*Math.PI*2,born:tick,life:400+Math.random()*400});
   }
   for(let i=goldMotes.length-1;i>=0;i--)if(tick-goldMotes[i].born>goldMotes[i].life)goldMotes.splice(i,1);
 }
@@ -1698,7 +1144,91 @@ function updateGold(){
 // RENDER
 // ═══════════════════════════════════════════════════════════
 
-/* vine/leaf/tendril drawing functions removed — see index_full_vines.html */
+function drawVinePath(path,thick,depth,hue,age){
+  if(path.length<2)return;
+  const af=Math.min(1,age/500);
+  const c=INK[(hue|0)%INK.length];
+  const dim=Math.max(.4,1-depth*.12-af*.1);
+  X.lineCap='round';X.lineJoin='round';
+  for(let i=1;i<path.length;i++){
+    const t2=i/path.length;
+    const taper=thick*(1-t2*.6)*DPR;
+    const iv=.9+Math.sin(i*.7)*.1;
+    X.strokeStyle=`rgba(${c[0]*dim*iv|0},${c[1]*dim*iv|0},${c[2]*dim*iv|0},${.8-af*.15})`;
+    X.lineWidth=Math.max(.3*DPR,taper);
+    if(taper>2*DPR){X.shadowColor=`rgba(${c[0]},${c[1]},${c[2]},.08)`;X.shadowBlur=2*DPR}
+    else{X.shadowColor='transparent'}
+    X.beginPath();
+    const p0=path[i-1],p1=path[i];
+    X.moveTo(p0.x*DPR,(p0.y-scrollY)*DPR);
+    if(i<path.length-1){const p2=path[i+1];X.quadraticCurveTo(p1.x*DPR,(p1.y-scrollY)*DPR,(p1.x+p2.x)/2*DPR,((p1.y+p2.y)/2-scrollY)*DPR)}
+    else X.lineTo(p1.x*DPR,(p1.y-scrollY)*DPR);
+    X.stroke();
+  }
+  X.shadowColor='transparent';X.shadowBlur=0;
+}
+
+function drawLeaf(leaf){
+  const {x,y,angle,size,lobes,depth,hue,born,flip}=leaf;
+  const age=tick-born;const af=Math.min(1,age/400);
+  const s=size*DPR;const c=INK[(hue|0)%INK.length];
+  const dim=Math.max(.5,1-depth*.1);
+  const gr=(35+80*af)*dim,gg=(110-40*af)*dim,gb=(25+15*af)*dim;
+  X.save();
+  X.translate(x*DPR,(y-scrollY)*DPR);X.rotate(angle);X.scale(1,flip);
+  // Rib
+  X.strokeStyle=`rgba(${gr*.7|0},${gg*.7|0},${gb|0},.6)`;X.lineWidth=.7*DPR;
+  X.beginPath();X.moveTo(0,0);X.quadraticCurveTo(s*.6,-s*.05,s*1.1,s*.05);X.stroke();
+  // Lobes
+  X.fillStyle=`rgba(${gr|0},${gg|0},${gb|0},.6)`;
+  for(let i=0;i<lobes;i++){
+    const t=(.3+i)/lobes,cx=s*t*1.1,ls=s*.4*(1-t*.5),side=i%2===0?1:-1;
+    X.beginPath();X.moveTo(cx,0);
+    X.bezierCurveTo(cx+ls*.15,side*ls*.5,cx+ls*.4,side*ls*.9,cx+ls*.55,side*ls*.85);
+    X.bezierCurveTo(cx+ls*.65,side*ls*.4,cx+ls*.5,side*ls*.1,cx+ls*.35,0);
+    X.fill();
+    // Vein
+    X.strokeStyle=`rgba(${gr*.6|0},${gg*.6|0},${gb*.6|0},.25)`;X.lineWidth=.35*DPR;
+    X.beginPath();X.moveTo(cx+ls*.1,0);X.quadraticCurveTo(cx+ls*.3,side*ls*.4,cx+ls*.5,side*ls*.7);X.stroke();
+  }
+  X.restore();
+}
+
+function drawTendril(t){
+  const c=INK[(t.hue|0)%INK.length];
+  const af=Math.min(1,(tick-t.born)/300);
+  const dim=Math.max(.5,1-t.depth*.1-af*.1);
+  // Use displaced position; crush flattens and fades the tendril
+  const rx = (t.renderX !== undefined ? t.renderX : t.x);
+  const ry = (t.renderY !== undefined ? t.renderY : t.y);
+  const crush = t.crush || 0;
+  const baseThick = t.thick || 1.5;
+  const alpha = (.85-af*.15) * (1 - crush*0.5); // fade when crushed
+  const scaleY = 1 - crush*0.65; // flatten vertically when crushed
+
+  X.save();
+  X.translate(rx*DPR,(ry-scrollY)*DPR);
+  X.scale(1, scaleY);
+  X.strokeStyle=`rgba(${c[0]*dim|0},${c[1]*dim|0},${c[2]*dim|0},${alpha})`;
+  X.lineCap='round';
+  // Ink bleed shadow for thick tendrils
+  if (baseThick > 2) {
+    X.shadowColor=`rgba(${c[0]},${c[1]},${c[2]},0.12)`;
+    X.shadowBlur=3*DPR;
+  }
+  let a=t.angle;const r=t.radius*DPR;const steps=t.turns*30|0;
+  X.beginPath();X.moveTo(0,0);
+  for(let i=1;i<=steps;i++){
+    const f=i/steps;
+    a+=(Math.PI*2*t.turns/steps)*t.cw;
+    // Thick at start, tapering to thin — calligraphic spiral
+    X.lineWidth=Math.max(.4*DPR, (baseThick - f*(baseThick*0.85)) * DPR);
+    X.lineTo(Math.cos(a)*r*(1-f*.88), Math.sin(a)*r*(1-f*.88));
+  }
+  X.stroke();
+  X.shadowColor='transparent';X.shadowBlur=0;
+  X.restore();
+}
 
 function renderText(){
   for(const l of textLines){
@@ -1814,10 +1344,11 @@ function updateLinkOverlays(){
 
 function simulate(){
   tick++;
+  growVines();
   updateCreatures();
-  updateWorm();
   updateGold();
   displaceText();
+  displaceTendrils();
 }
 
 function render(){
@@ -1833,17 +1364,26 @@ function render(){
 
   X.clearRect(0,0,IC.width,IC.height);
 
-  // The Worm
-  drawWorm();
-
-  // Food (ink motes, crumbs, corpses)
-  renderFood();
-
-  // Creatures (cull offscreen)
-  for(const c of creatures){
-    if(c.y-scrollY<-100||c.y-scrollY>H+100)continue;
-    drawCreature(c);
+  // Vines (completed)
+  for(const v of vinePaths)drawVinePath(v.path,v.thick,v.depth,v.hue,tick-v.born);
+  // Vines (growing)
+  for(const t of vineTips){
+    drawVinePath(t.path,t.thick,t.depth,t.hue,tick-t.born);
+    const glow=t.energy*(.7+.3*Math.sin(frame*.12+t.phase));
+    const r=(1.5+glow*2)*DPR;
+    X.save();X.globalAlpha=glow*.25;
+    X.fillStyle=`rgb(${180+50*glow|0},${140+40*glow|0},40)`;
+    X.beginPath();X.arc(t.x*DPR,(t.y-scrollY)*DPR,r*2.5,0,Math.PI*2);X.fill();
+    X.globalAlpha=glow*.7;X.beginPath();X.arc(t.x*DPR,(t.y-scrollY)*DPR,r,0,Math.PI*2);X.fill();
+    X.restore();
   }
+
+  // Tendrils, leaves
+  for(const t of vineTendrils)drawTendril(t);
+  for(const l of vineLeaves)drawLeaf(l);
+
+  // Creatures
+  for(const c of creatures)drawCreature(c);
 
   // Text
   renderText();
@@ -1855,121 +1395,25 @@ function render(){
   requestAnimationFrame(render);
 }
 
-// ─── Drag & Fling System ────────────────────────────────────
-let dragTarget = null;    // creature being dragged
-let dragOffX = 0, dragOffY = 0;
-let dragPrevX = 0, dragPrevY = 0;
-let dragVX = 0, dragVY = 0;
-
-function findCreatureAt(mx, my) {
-  const sy = scrollY;
-  // Check worm head first
-  if (worm) {
-    const wh = worm.body[0];
-    const d = Math.sqrt((mx - wh.x)**2 + (my + sy - wh.y)**2);
-    if (d < wh.r * 2) return 'worm';
-  }
-  // Check creatures (reverse order = topmost first)
-  for (let i = creatures.length - 1; i >= 0; i--) {
-    const c = creatures[i];
-    const d = Math.sqrt((mx - c.x)**2 + (my + sy - c.y)**2);
-    if (d < c.size * 1.5 + 15) return c;
-  }
-  return null;
-}
-
-function onPointerDown(mx, my) {
-  const target = findCreatureAt(mx, my);
-  if (!target) return;
-  dragTarget = target;
-  if (target === 'worm') {
-    worm._dragging = true;
-    dragOffX = worm.body[0].x - mx;
-    dragOffY = worm.body[0].y - (my + scrollY);
-    dragPrevX = mx; dragPrevY = my;
-    dragVX = 0; dragVY = 0;
-    IC.style.cursor = 'grabbing';
-    return;
-  }
-  dragTarget._dragging = true;
-  dragOffX = dragTarget.x - mx;
-  dragOffY = dragTarget.y - (my + scrollY);
-  dragPrevX = mx; dragPrevY = my;
-  dragVX = 0; dragVY = 0;
-  IC.style.cursor = 'grabbing';
-}
-
-function onPointerMove(mx, my) {
-  // Always update pointer for vine/shimmer system
-  ptr.tx = mx; ptr.ty = my;
-  document.documentElement.style.setProperty('--cursor-x', (mx/W*100)+'%');
-  document.documentElement.style.setProperty('--cursor-y', (my/H*100)+'%');
-
-  if (dragTarget) {
-    dragVX = (mx - dragPrevX) * 0.5;
-    dragVY = (my - dragPrevY) * 0.5;
-    dragPrevX = mx; dragPrevY = my;
-
-    if (dragTarget === 'worm') {
-      // Drag the worm head — body follows via chain physics, but wiggle like crazy
-      worm.body[0].x = mx + dragOffX;
-      worm.body[0].y = my + scrollY + dragOffY;
-      worm._wiggleIntensity = 3; // cranked up wiggle
-    } else {
-      dragTarget.x = mx + dragOffX;
-      dragTarget.y = my + scrollY + dragOffY;
-      dragTarget.vx = 0; dragTarget.vy = 0;
-    }
-  } else {
-    // Show grab cursor when hovering over a creature
-    const hover = findCreatureAt(mx, my);
-    IC.style.cursor = hover ? 'grab' : 'default';
-  }
-}
-
-function onPointerUp() {
-  if (dragTarget) {
-    if (dragTarget === 'worm') {
-      worm._dragging = false;
-      worm._wiggleIntensity = 1; // back to normal
-      // Fling the worm head
-      worm.body[0].x += dragVX * 8;
-      worm.body[0].y += dragVY * 8;
-    } else {
-      dragTarget.vx = dragVX * 3;
-      dragTarget.vy = dragVY * 3;
-      dragTarget._dragging = false;
-    }
-    dragTarget = null;
-    IC.style.cursor = 'default';
-  }
-}
-
 // ─── Events ─────────────────────────────────────────────────
-IC.addEventListener('mousedown', e => onPointerDown(e.clientX, e.clientY));
-window.addEventListener('mousemove', e => onPointerMove(e.clientX, e.clientY), {passive:true});
-window.addEventListener('mouseup', () => onPointerUp());
-
-IC.addEventListener('touchstart', e => {
-  if (e.touches[0]) onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
-}, {passive:true});
-window.addEventListener('touchmove', e => {
-  if (e.touches[0]) onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
-}, {passive:true});
-window.addEventListener('touchend', () => onPointerUp(), {passive:true});
-
-window.addEventListener('mouseleave', () => { ptr.tx=W/2; ptr.ty=H*.4; onPointerUp(); });
-window.addEventListener('resize', resize, {passive:true});
+window.addEventListener('mousemove',e=>{
+  ptr.tx=e.clientX;ptr.ty=e.clientY;
+  document.documentElement.style.setProperty('--cursor-x',(e.clientX/W*100)+'%');
+  document.documentElement.style.setProperty('--cursor-y',(e.clientY/H*100)+'%');
+},{passive:true});
+window.addEventListener('touchmove',e=>{if(e.touches[0]){ptr.tx=e.touches[0].clientX;ptr.ty=e.touches[0].clientY}},{passive:true});
+window.addEventListener('mouseleave',()=>{ptr.tx=W/2;ptr.ty=H*.4});
+window.addEventListener('resize',resize,{passive:true});
 
 // ─── Init ───────────────────────────────────────────────────
 document.fonts.ready.then(()=>{
   initNoise();
   resize();
-  spawnWorm();
-  // Pre-simulate creatures
-  for(let i=0;i<30;i++)simulate();
-  // Spawn the first golden creature quickly (subsequent ones every 3-4 min)
-  lastGoldenSpawn = tick - GOLDEN_INTERVAL + 200; // first golden in ~10s
+  // Seeds from margins
+  for(let i=0;i<5;i++)spawnEdgeSeed();
+  // Pre-grow
+  for(let i=0;i<40;i++)simulate();
+  // Run
   setInterval(simulate,1000/20);
   render();
 });
