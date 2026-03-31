@@ -13,15 +13,14 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;overflow-x:hidden;background:#ede4d3}
 canvas{position:absolute;top:0;left:0;width:100%}
-#parchment{pointer-events:none}
-#parchment{z-index:0}
+#parchment{pointer-events:none;z-index:0}
 #ink{z-index:1}
 /* Hidden accessible text for screen readers and link clicks */
 .sr-only{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
-.click-overlay{position:absolute;z-index:2}
+.click-overlay{position:absolute;z-index:2;pointer-events:none}
 .click-overlay a{
   position:absolute;color:transparent;text-decoration:none;
-  cursor:pointer;
+  cursor:pointer;pointer-events:auto;
 }
 </style>
 </head>
@@ -87,18 +86,28 @@ const CONTENT = [
 ];
 
 // ─── FONTS ──────────────────────────────────────────────────
-const F = {
-  title: ()=> `900 ${sc(38)}px "Cinzel Decorative",serif`,
-  subtitle: ()=> `italic ${sc(15)}px "IM Fell English",serif`,
-  heading: ()=> `600 ${sc(11)}px "Cinzel",serif`,
-  entryTitle: ()=> `600 ${sc(13)}px "Cinzel",serif`,
-  entryDate: ()=> `${sc(11)}px "IM Fell English",serif`,
-  role: ()=> `italic ${sc(12)}px "IM Fell English",serif`,
-  body: ()=> `${sc(13.5)}px "IM Fell English",serif`,
-  bullet: ()=> `${sc(12.5)}px "IM Fell English",serif`,
-  link: ()=> `${sc(12)}px "IM Fell English",serif`,
+// Font sizes in logical CSS pixels. At render time, multiply by DPR.
+const FONT_DEFS = {
+  title:      {weight:'900', size:38, family:'"Cinzel Decorative",serif'},
+  subtitle:   {weight:'normal', size:15, style:'italic', family:'"IM Fell English",serif'},
+  heading:    {weight:'600', size:11, family:'"Cinzel",serif'},
+  entryTitle: {weight:'600', size:13, family:'"Cinzel",serif'},
+  entryDate:  {weight:'normal', size:11, family:'"IM Fell English",serif'},
+  role:       {weight:'normal', size:12, style:'italic', family:'"IM Fell English",serif'},
+  body:       {weight:'normal', size:13.5, family:'"IM Fell English",serif'},
+  bullet:     {weight:'normal', size:12.5, family:'"IM Fell English",serif'},
+  link:       {weight:'normal', size:12, family:'"IM Fell English",serif'},
 };
-function sc(px){return px} // scale factor (could DPR-adjust)
+function makeFont(key, scale) {
+  const d = FONT_DEFS[key];
+  const sz = d.size * (scale || 1);
+  return `${d.style||''} ${d.weight} ${sz}px ${d.family}`.trim();
+}
+// F returns LOGICAL fonts (for layout/measurement in CSS px)
+const F = {};
+for (const k in FONT_DEFS) F[k] = () => makeFont(k, 1);
+// FR returns RENDER fonts (scaled by DPR for canvas drawing)
+function FR(key) { return makeFont(key, DPR || 1); }
 
 const COL = {
   ink:'#1e160e', inkMid:'#3d2e1f', inkLight:'#6b5640',
@@ -174,20 +183,20 @@ function layoutAllText() {
         const metrics = mc.measureText(block.text);
         const tx = W/2;
         cy += 10;
-        textLines.push({text:block.text, x:tx, y:cy, font:F.title(), color:COL.ink, align:'center', type:'title'});
+        textLines.push({text:block.text, x:tx, y:cy, font:F.title(), fontKey:'title', color:COL.ink, align:'center', type:'title'});
         cy += 48;
         break;
       }
       case 'subtitle': {
         mc.font = F.subtitle();
-        textLines.push({text:block.text, x:W/2, y:cy, font:F.subtitle(), color:COL.inkLight, align:'center', type:'subtitle'});
+        textLines.push({text:block.text, x:W/2, y:cy, font:F.subtitle(), fontKey:'subtitle', color:COL.inkLight, align:'center', type:'subtitle'});
         cy += 22;
         break;
       }
       case 'links': {
         mc.font = F.link();
         const fullText = block.items.map(i=>i.text).join('     ·     ');
-        textLines.push({text:fullText, x:W/2, y:cy, font:F.link(), color:COL.ultramarine, align:'center', type:'link', linkData:block.items});
+        textLines.push({text:fullText, x:W/2, y:cy, font:F.link(), fontKey:'link', color:COL.ultramarine, align:'center', type:'link', linkData:block.items});
         cy += 28;
         break;
       }
@@ -198,7 +207,7 @@ function layoutAllText() {
       case 'heading': {
         mc.font = F.heading();
         // Decorative heading with vermillion color
-        textLines.push({text:block.text.toUpperCase(), x:ml, y:cy, font:F.heading(), color:COL.vermillion, align:'left', type:'heading', letterSpacing:4});
+        textLines.push({text:block.text.toUpperCase(), x:ml, y:cy, font:F.heading(), fontKey:'heading', color:COL.vermillion, align:'left', type:'heading', letterSpacing:4});
         cy += 20;
         // Thin rule under heading
         textLines.push({type:'rule', x:ml, y:cy-6, width:maxW});
@@ -210,13 +219,13 @@ function layoutAllText() {
         let ex = ml;
         const espw = mc.measureText(' ').width;
         for (const w of block.title.split(' ')) {
-          textLines.push({text:w, x:ex, y:cy, font:F.entryTitle(), color:COL.ink, align:'left', type:'word'});
+          textLines.push({text:w, x:ex, y:cy, font:F.entryTitle(), fontKey:'entryTitle', color:COL.ink, align:'left', type:'word'});
           ex += mc.measureText(w).width + espw;
         }
         if (block.date) {
           mc.font = F.entryDate();
           const dw = mc.measureText(block.date).width;
-          textLines.push({text:block.date, x:ml+maxW-dw, y:cy, font:F.entryDate(), color:COL.inkLight, align:'left', type:'word'});
+          textLines.push({text:block.date, x:ml+maxW-dw, y:cy, font:F.entryDate(), fontKey:'entryDate', color:COL.inkLight, align:'left', type:'word'});
         }
         cy += 18;
         if (block.role) {
@@ -224,7 +233,7 @@ function layoutAllText() {
           let rx = ml;
           const rspw = mc.measureText(' ').width;
           for (const w of block.role.split(' ')) {
-            textLines.push({text:w, x:rx, y:cy, font:F.role(), color:COL.inkLight, align:'left', type:'word'});
+            textLines.push({text:w, x:rx, y:cy, font:F.role(), fontKey:'role', color:COL.inkLight, align:'left', type:'word'});
             rx += mc.measureText(w).width + rspw;
           }
           cy += 18;
@@ -237,7 +246,7 @@ function layoutAllText() {
         const indent = isBullet ? 18 : 0;
         const prefix = isBullet ? '❧  ' : '';
         mc.font = isBullet ? F.bullet() : F.body();
-        const fontSize = isBullet ? sc(12.5) : sc(13.5);
+        const fontSize = isBullet ? 12.5 : 13.5;
         const lh = fontSize * LINE_GAP;
         const font = isBullet ? F.bullet() : F.body();
         const words = (prefix + block.text).split(' ');
@@ -254,7 +263,7 @@ function layoutAllText() {
             curX = lineX;
           }
           // Each word is its own text element
-          textLines.push({text:words[w], x:curX, y:cy, font:font, color:isBullet?COL.ink:COL.inkMid, align:'left', type:'word'});
+          textLines.push({text:words[w], x:curX, y:cy, font:font, fontKey:isBullet?'bullet':'body', color:isBullet?COL.ink:COL.inkMid, align:'left', type:'word'});
           curX += ww + spaceW;
         }
         cy += lh + 3;
@@ -1716,7 +1725,8 @@ function renderText(){
     if(ry<-30||ry>H*DPR+30)continue;
     const rx=l.renderX*DPR;
 
-    X.font=l.font;X.fillStyle=l.color;
+    X.font=l.fontKey ? FR(l.fontKey) : l.font;
+    X.fillStyle=l.color;
     X.textBaseline='top';
 
     if(l.align==='center'){
