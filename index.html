@@ -19,8 +19,11 @@ canvas{position:absolute;top:0;left:0;width:100%}
 .sr-only{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .click-overlay{position:absolute;z-index:2;pointer-events:none}
 .click-overlay a{
-  position:absolute;color:transparent;text-decoration:none;
+  position:absolute;text-decoration:none;
   cursor:pointer;pointer-events:auto;
+  color:rgba(26,53,122,0.01);font-size:0;
+  min-width:44px;min-height:44px;
+  display:flex;align-items:center;justify-content:center;
 }
 </style>
 </head>
@@ -1221,6 +1224,16 @@ function drawCreature(c){
     X.globalAlpha = 1;
   }
 
+  // Grab glow feedback (pulses when first picked up)
+  if (c._grabTick && tick - c._grabTick < 30) {
+    const pulse = 1 - (tick - c._grabTick) / 30;
+    const gr = c.size * DPR * (1.5 + pulse);
+    X.globalAlpha = pulse * 0.3;
+    X.fillStyle = 'rgba(255,255,255,1)';
+    X.beginPath(); X.arc(0, 0, gr, 0, Math.PI * 2); X.fill();
+    X.globalAlpha = 1;
+  }
+
   X.strokeStyle=ink;X.fillStyle=inkFill;
   X.lineWidth=1.1*DPR;X.lineCap='round';X.lineJoin='round';
 
@@ -1813,8 +1826,11 @@ function updateLinkOverlays(){
         a.href=item.href;
         if(item.href.startsWith('http'))a.target='_blank';
         a.textContent=item.text;
-        a.style.left=cx+'px';a.style.top=(l.origY-2)+'px';
-        a.style.width=w+'px';a.style.height='18px';
+        const tapW = Math.max(w, 44);
+        const tapH = 44;
+        a.style.left=(cx - (tapW - w)/2)+'px';
+        a.style.top=(l.origY - (tapH - 16)/2)+'px';
+        a.style.width=tapW+'px';a.style.height=tapH+'px';
         linksDiv.appendChild(a);
         cx+=mc.measureText(item.text+'     ·     ').width;
       }
@@ -1871,29 +1887,31 @@ let dragOffX = 0, dragOffY = 0;
 let dragPrevX = 0, dragPrevY = 0;
 let dragVX = 0, dragVY = 0;
 
-function findCreatureAt(mx, my) {
+function findCreatureAt(mx, my, isTouch) {
   const sy = scrollY;
+  const extra = isTouch ? 20 : 0; // fatter hit area for fingers
   // Check worm head first
   if (worm) {
     const wh = worm.body[0];
     const d = Math.sqrt((mx - wh.x)**2 + (my + sy - wh.y)**2);
-    if (d < wh.r * 2) return 'worm';
+    if (d < wh.r * 2 + extra) return 'worm';
   }
   // Check creatures (reverse order = topmost first)
   for (let i = creatures.length - 1; i >= 0; i--) {
     const c = creatures[i];
     const d = Math.sqrt((mx - c.x)**2 + (my + sy - c.y)**2);
-    if (d < c.size * 1.5 + 15) return c;
+    if (d < c.size * 1.5 + 15 + extra) return c;
   }
   return null;
 }
 
-function onPointerDown(mx, my) {
-  const target = findCreatureAt(mx, my);
+function onPointerDown(mx, my, isTouch) {
+  const target = findCreatureAt(mx, my, isTouch);
   if (!target) return;
   dragTarget = target;
   if (target === 'worm') {
     worm._dragging = true;
+    worm._grabTick = tick;
     dragOffX = worm.body[0].x - mx;
     dragOffY = worm.body[0].y - (my + scrollY);
     dragPrevX = mx; dragPrevY = my;
@@ -1902,6 +1920,7 @@ function onPointerDown(mx, my) {
     return;
   }
   dragTarget._dragging = true;
+  dragTarget._grabTick = tick;
   dragOffX = dragTarget.x - mx;
   dragOffY = dragTarget.y - (my + scrollY);
   dragPrevX = mx; dragPrevY = my;
@@ -1961,11 +1980,19 @@ window.addEventListener('mousemove', e => onPointerMove(e.clientX, e.clientY), {
 window.addEventListener('mouseup', () => onPointerUp());
 
 IC.addEventListener('touchstart', e => {
-  if (e.touches[0]) onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
-}, {passive:true});
+  if (!e.touches[0]) return;
+  const mx = e.touches[0].clientX, my = e.touches[0].clientY;
+  const hit = findCreatureAt(mx, my, true);
+  if (hit) {
+    e.preventDefault(); // prevent scroll when grabbing a creature
+    onPointerDown(mx, my, true);
+  }
+}, {passive: false});
 window.addEventListener('touchmove', e => {
-  if (e.touches[0]) onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
-}, {passive:true});
+  if (!e.touches[0]) return;
+  if (dragTarget) e.preventDefault(); // prevent scroll while dragging
+  onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+}, {passive:false});
 window.addEventListener('touchend', () => onPointerUp(), {passive:true});
 
 window.addEventListener('mouseleave', () => { ptr.tx=W/2; ptr.ty=H*.4; onPointerUp(); });
