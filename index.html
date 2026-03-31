@@ -6,9 +6,7 @@
 <title>Lauhitya Reddy</title>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE6KMDQ2LN"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-BE6KMDQ2LN');</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Cinzel+Decorative:wght@400;700;900&family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- fonts: system serif only, title hand-drawn on canvas -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;overflow-x:hidden;background:#ede4d3}
@@ -90,16 +88,17 @@ const CONTENT = [
 
 // ─── FONTS ──────────────────────────────────────────────────
 // Font sizes in logical CSS pixels. At render time, multiply by DPR.
+const SRF = 'Georgia,"Times New Roman",serif';
 const FONT_DEFS = {
-  title:      {weight:'900', size:38, family:'"Cinzel Decorative",serif'},
-  subtitle:   {weight:'normal', size:15, style:'italic', family:'"IM Fell English",serif'},
-  heading:    {weight:'600', size:11, family:'"Cinzel",serif'},
-  entryTitle: {weight:'600', size:13, family:'"Cinzel",serif'},
-  entryDate:  {weight:'normal', size:11, family:'"IM Fell English",serif'},
-  role:       {weight:'normal', size:12, style:'italic', family:'"IM Fell English",serif'},
-  body:       {weight:'normal', size:13.5, family:'"IM Fell English",serif'},
-  bullet:     {weight:'normal', size:12.5, family:'"IM Fell English",serif'},
-  link:       {weight:'normal', size:12, family:'"IM Fell English",serif'},
+  title:      {weight:'700', size:36, family:SRF},  // fallback only, title is hand-drawn
+  subtitle:   {weight:'normal', size:14.5, style:'italic', family:SRF},
+  heading:    {weight:'700', size:11, family:SRF},
+  entryTitle: {weight:'700', size:13, family:SRF},
+  entryDate:  {weight:'normal', size:11, family:SRF},
+  role:       {weight:'normal', size:12, style:'italic', family:SRF},
+  body:       {weight:'normal', size:13.5, family:SRF},
+  bullet:     {weight:'normal', size:12.5, family:SRF},
+  link:       {weight:'normal', size:12, family:SRF},
 };
 function makeFont(key, scale) {
   const d = FONT_DEFS[key];
@@ -162,7 +161,8 @@ function renderParchment(){
 
 // ─── TEXT LAYOUT ENGINE ─────────────────────────────────────
 // Flows text around obstacles (creatures, vine clusters)
-let textLines = [];       // [{text, x, y, font, color, align, origY, dx, dy}]
+let textLines = [];
+let titleY = 60;          // set during layout
 let textDirty = true;
 let lastLayoutTick = -999;
 const TEXT_MARGIN_L = 0.18; // left margin as fraction of W
@@ -182,12 +182,10 @@ function layoutAllText() {
   for (const block of CONTENT) {
     switch(block.type) {
       case 'title': {
-        mc.font = F.title();
-        const metrics = mc.measureText(block.text);
-        const tx = W/2;
         cy += 10;
-        textLines.push({text:block.text, x:tx, y:cy, font:F.title(), fontKey:'title', color:COL.ink, align:'center', type:'title'});
-        cy += 48;
+        // Title is rendered as creature-letters, not text
+        titleY = cy;
+        cy += 55;
         break;
       }
       case 'subtitle': {
@@ -988,6 +986,333 @@ function renderFood() {
       X.fillStyle = `rgba(85,52,25,${alpha * 0.6})`;
       X.beginPath(); X.arc(fx, fy, (f.size + 0.5) * DPR, 0, Math.PI * 2); X.fill();
     }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// CREATURE-LETTERS — each character of the name is a living creature
+// ═══════════════════════════════════════════════════════════
+const titleLetters = [];
+
+// Each letter is defined as a spine path (relative coords, scaled at render)
+// Format: array of {x, y, r} — the creature's body traces the letter shape
+const LETTER_PATHS = {
+  'L': [{x:0,y:0,r:3},{x:0,y:8,r:3.5},{x:0,y:16,r:3.5},{x:0,y:24,r:3},{x:6,y:24,r:2.5},{x:12,y:24,r:2}],
+  'a': [{x:10,y:10,r:2},{x:10,y:16,r:2.2},{x:10,y:22,r:2},{x:7,y:24,r:2.5},{x:3,y:22,r:2.5},{x:1,y:18,r:2.5},{x:2,y:13,r:2.5},{x:5,y:10,r:2},{x:9,y:10,r:1.5}],
+  'u': [{x:1,y:10,r:2.5},{x:1,y:16,r:2.5},{x:2,y:22,r:2.5},{x:5,y:24,r:2.5},{x:8,y:22,r:2.5},{x:10,y:16,r:2.5},{x:10,y:10,r:2.5}],
+  'h': [{x:1,y:0,r:2.5},{x:1,y:8,r:2.8},{x:1,y:16,r:2.5},{x:1,y:24,r:2.2},{x:3,y:14,r:2},{x:6,y:11,r:2.5},{x:9,y:13,r:2.5},{x:10,y:18,r:2.5},{x:10,y:24,r:2.2}],
+  'i': [{x:4,y:10,r:2},{x:4,y:15,r:2.5},{x:4,y:20,r:2.5},{x:4,y:24,r:2}],
+  't': [{x:5,y:2,r:2},{x:5,y:8,r:2.5},{x:5,y:14,r:2.5},{x:5,y:20,r:2.5},{x:5,y:24,r:2},{x:2,y:9,r:1.5},{x:5,y:8,r:2},{x:8,y:9,r:1.5}],
+  'y': [{x:1,y:10,r:2.5},{x:3,y:15,r:2.5},{x:5,y:19,r:2.8},{x:4,y:24,r:2.5},{x:2,y:28,r:2},{x:10,y:10,r:2.5},{x:8,y:15,r:2.5},{x:5,y:19,r:2}],
+  ' ': [],
+  'R': [{x:1,y:0,r:3},{x:1,y:8,r:3.2},{x:1,y:16,r:3},{x:1,y:24,r:2.8},{x:3,y:1,r:2.5},{x:8,y:2,r:2.5},{x:10,y:6,r:2.5},{x:8,y:10,r:2.5},{x:3,y:12,r:2},{x:7,y:18,r:2.5},{x:11,y:24,r:2}],
+  'e': [{x:9,y:16,r:2},{x:5,y:14,r:2},{x:2,y:16,r:2.5},{x:1,y:20,r:2.5},{x:3,y:24,r:2.5},{x:7,y:24,r:2},{x:9,y:22,r:1.8}],
+  'd': [{x:9,y:0,r:2.2},{x:9,y:8,r:2.5},{x:9,y:16,r:2.5},{x:9,y:24,r:2.2},{x:7,y:24,r:2.5},{x:3,y:22,r:2.5},{x:1,y:18,r:2.5},{x:2,y:13,r:2.5},{x:5,y:10,r:2},{x:9,y:12,r:1.8}],
+};
+
+// Creature features for each letter (randomized at init)
+const LETTER_HEADS = ['canine','avian','reptile','insect','fish','amoeba','jellyfish','sphinx','cyclops','medusa','nautilus','oni','anglerfish','diatom'];
+const LETTER_DECORS = ['plain','scaled','hatched','spotted','striped','spined','ciliated'];
+
+function initTitleCreatures() {
+  titleLetters.length = 0;
+  const name = 'Lauhitya Reddy';
+  const letterW = 16; // base width per letter
+  const totalW = name.length * letterW;
+  const startX = W/2 - totalW/2;
+
+  for (let i = 0; i < name.length; i++) {
+    const ch = name[i];
+    const path = LETTER_PATHS[ch] || LETTER_PATHS[ch.toLowerCase()];
+    if (!path || path.length === 0) {
+      titleLetters.push(null); // space
+      continue;
+    }
+
+    const baseX = startX + i * letterW;
+    const baseY = titleY;
+    const headType = LETTER_HEADS[Math.random()*LETTER_HEADS.length|0];
+    const decor = LETTER_DECORS[Math.random()*LETTER_DECORS.length|0];
+
+    // Create animated spine from letter path
+    const spine = path.map(p => ({
+      ox: p.x, oy: p.y, r: p.r,
+      // Animation offsets
+      wobbleAmp: 0.3 + Math.random() * 0.5,
+      wobbleFreq: 0.8 + Math.random() * 0.4,
+      wobblePhase: Math.random() * Math.PI * 2,
+    }));
+
+    titleLetters.push({
+      char: ch,
+      baseX, baseY,
+      spine,
+      headType,
+      decor,
+      ink: INK[Math.random()*INK.length|0],
+      scale: 1.4,
+      idlePhase: Math.random() * Math.PI * 2,
+      blinkTimer: 100 + Math.random()*200|0,
+      blinkState: 0, // 0=open, counts down when blinking
+      // Tiny appendages
+      hasLegs: Math.random() < 0.4,
+      hasTail: Math.random() < 0.3,
+      hasWings: Math.random() < 0.2,
+      hasHorns: headType==='oni'||headType==='reptile'||Math.random()<0.15,
+      hasAntennae: headType==='insect'||headType==='diatom'||Math.random()<0.15,
+      // Which segment gets the head (usually first)
+      headSeg: 0,
+      // Eye count
+      numEyes: headType==='cyclops'?1:2,
+    });
+  }
+}
+
+function drawTitleCreatures() {
+  const yOff = -scrollY;
+
+  for (let li = 0; li < titleLetters.length; li++) {
+    const L = titleLetters[li];
+    if (!L) continue;
+
+    const s = L.scale * DPR;
+    const col = L.ink;
+    const ink = `rgba(${col[0]},${col[1]},${col[2]},0.85)`;
+    const inkFill = `rgba(${col[0]},${col[1]},${col[2]},0.18)`;
+    const idle = Math.sin(L.idlePhase);
+
+    L.idlePhase += 0.03;
+
+    // Blinking
+    L.blinkTimer--;
+    if (L.blinkTimer <= 0 && L.blinkState === 0) {
+      L.blinkState = 8; // blink for 8 frames
+      L.blinkTimer = 80 + Math.random()*200|0;
+    }
+    if (L.blinkState > 0) L.blinkState--;
+
+    X.save();
+    X.translate(L.baseX * DPR, (L.baseY + yOff) * DPR);
+
+    // Build animated spine
+    const sp = [];
+    for (let i = 0; i < L.spine.length; i++) {
+      const seg = L.spine[i];
+      const wobble = Math.sin(tick * 0.04 * seg.wobbleFreq + seg.wobblePhase) * seg.wobbleAmp;
+      const breathe = Math.sin(tick * 0.025 + i * 0.3) * 0.3;
+      sp.push({
+        x: seg.ox * s + wobble * s,
+        y: seg.oy * s + breathe * s,
+        r: (seg.r + Math.sin(tick * 0.03 + i) * 0.2) * s,
+      });
+    }
+
+    // Draw body contour (same technique as creatures)
+    if (sp.length >= 2) {
+      X.beginPath();
+      X.moveTo(sp[0].x, sp[0].y - sp[0].r);
+      for (let i = 1; i < sp.length; i++) {
+        const p = sp[i-1], q = sp[i];
+        X.quadraticCurveTo(p.x, p.y - p.r, (p.x+q.x)/2, (p.y-p.r+q.y-q.r)/2);
+      }
+      const last = sp[sp.length-1];
+      X.lineTo(last.x, last.y - last.r);
+      X.arc(last.x, last.y, last.r, -Math.PI/2, Math.PI/2);
+      for (let i = sp.length-2; i >= 0; i--) {
+        const p = sp[i+1], q = sp[i];
+        X.quadraticCurveTo(p.x, p.y + p.r, (p.x+q.x)/2, (p.y+p.r+q.y+q.r)/2);
+      }
+      X.arc(sp[0].x, sp[0].y, sp[0].r, Math.PI/2, -Math.PI/2);
+      X.closePath();
+      X.fillStyle = inkFill;
+      X.fill();
+      X.strokeStyle = ink;
+      X.lineWidth = 1.1 * DPR;
+      X.lineCap = 'round';
+      X.stroke();
+    }
+
+    // Decoration (same system as creatures)
+    X.strokeStyle = ink;
+    X.lineWidth = 0.8 * DPR;
+    if (L.decor === 'scaled') {
+      X.globalAlpha = 0.12;
+      for (let i = 0; i < sp.length-1; i++) {
+        X.beginPath(); X.arc(sp[i].x+sp[i].r*.3, sp[i].y, sp[i].r*.3, -.6, .6); X.stroke();
+      }
+      X.globalAlpha = 1;
+    } else if (L.decor === 'hatched') {
+      X.globalAlpha = 0.1;
+      for (let i = 0; i < sp.length; i++) {
+        for (let h = -1; h <= 1; h++) {
+          X.beginPath();
+          X.moveTo(sp[i].x-sp[i].r*.3, sp[i].y+h*sp[i].r*.3);
+          X.lineTo(sp[i].x+sp[i].r*.3, sp[i].y+h*sp[i].r*.3-sp[i].r*.2);
+          X.stroke();
+        }
+      }
+      X.globalAlpha = 1;
+    } else if (L.decor === 'spotted') {
+      X.globalAlpha = 0.1; X.fillStyle = ink;
+      for (let i = 1; i < sp.length-1; i += 2) {
+        X.beginPath(); X.arc(sp[i].x, sp[i].y, sp[i].r*.2, 0, Math.PI*2); X.fill();
+      }
+      X.globalAlpha = 1;
+    } else if (L.decor === 'striped') {
+      X.globalAlpha = 0.1;
+      for (let i = 0; i < sp.length; i++) {
+        X.beginPath(); X.moveTo(sp[i].x, sp[i].y-sp[i].r*.7); X.lineTo(sp[i].x, sp[i].y+sp[i].r*.7); X.stroke();
+      }
+      X.globalAlpha = 1;
+    } else if (L.decor === 'ciliated') {
+      X.globalAlpha = 0.15;
+      for (let i = 0; i < sp.length; i++) {
+        for (let a = -2; a <= 2; a++) {
+          const ang = (a/2)*Math.PI*.3 + Math.sin(tick*0.06+i+a)*.2;
+          X.beginPath();
+          X.moveTo(sp[i].x+Math.cos(ang)*sp[i].r, sp[i].y+Math.sin(ang)*sp[i].r);
+          X.lineTo(sp[i].x+Math.cos(ang)*(sp[i].r*1.3), sp[i].y+Math.sin(ang)*(sp[i].r*1.3));
+          X.stroke();
+        }
+      }
+      X.globalAlpha = 1;
+    } else if (L.decor === 'spined') {
+      X.globalAlpha = 0.25;
+      for (let i = 0; i < sp.length; i++) {
+        X.beginPath(); X.moveTo(sp[i].x, sp[i].y-sp[i].r);
+        X.lineTo(sp[i].x+Math.sin(tick*0.05+i)*sp[i].r*.2, sp[i].y-sp[i].r-sp[i].r*.5);
+        X.stroke();
+      }
+      X.globalAlpha = 1;
+    }
+
+    // HEAD — on the first segment
+    const hs = sp[L.headSeg];
+    const hr = hs.r * 0.9;
+    const hx = hs.x, hy = hs.y - hr * 1.2 + idle * DPR * 0.5;
+
+    X.fillStyle = inkFill;
+    X.strokeStyle = ink;
+    X.lineWidth = 1 * DPR;
+
+    // Head shape varies by type
+    switch(L.headType) {
+      case 'canine':
+        X.beginPath(); X.ellipse(hx, hy, hr*.8, hr*.6, 0, 0, Math.PI*2); X.fill(); X.stroke();
+        // Tiny ears
+        X.beginPath(); X.moveTo(hx-hr*.4,hy-hr*.4); X.lineTo(hx-hr*.2,hy-hr*.9); X.lineTo(hx,hy-hr*.4); X.stroke();
+        X.beginPath(); X.moveTo(hx+hr*.1,hy-hr*.4); X.lineTo(hx+hr*.3,hy-hr*.8); X.lineTo(hx+hr*.5,hy-hr*.3); X.stroke();
+        // Snout
+        X.beginPath(); X.moveTo(hx+hr*.7,hy); X.lineTo(hx+hr*1.1,hy+hr*.05); X.lineTo(hx+hr*.7,hy+hr*.1); X.stroke();
+        break;
+      case 'avian':
+        X.beginPath(); X.arc(hx, hy, hr*.5, 0, Math.PI*2); X.fill(); X.stroke();
+        X.beginPath(); X.moveTo(hx+hr*.4,hy-hr*.05); X.lineTo(hx+hr*.9,hy); X.lineTo(hx+hr*.4,hy+hr*.05); X.fill(); X.stroke();
+        break;
+      case 'reptile':
+        X.beginPath(); X.ellipse(hx, hy, hr*.9, hr*.4, 0, 0, Math.PI*2); X.fill(); X.stroke();
+        break;
+      case 'insect':
+        X.beginPath(); X.ellipse(hx, hy, hr*.5, hr*.45, 0, 0, Math.PI*2); X.fill(); X.stroke();
+        X.beginPath(); X.arc(hx-hr*.2, hy-hr*.2, hr*.2, 0, Math.PI*2); X.stroke();
+        X.beginPath(); X.arc(hx+hr*.2, hy-hr*.15, hr*.18, 0, Math.PI*2); X.stroke();
+        break;
+      case 'fish':
+        X.beginPath(); X.ellipse(hx, hy, hr*.7, hr*.4, 0, 0, Math.PI*2); X.fill(); X.stroke();
+        break;
+      case 'jellyfish':
+        X.beginPath(); X.arc(hx, hy, hr*.5, Math.PI, 0); X.fill(); X.stroke();
+        X.globalAlpha=.3;
+        for(let t=0;t<3;t++){X.beginPath();X.moveTo(hx-hr*.3+t*hr*.3,hy);X.bezierCurveTo(hx-hr*.3+t*hr*.3+Math.sin(tick*.05+t)*hr*.1,hy+hr*.4,hx-hr*.3+t*hr*.3,hy+hr*.6,hx-hr*.3+t*hr*.3+Math.sin(tick*.04+t)*hr*.15,hy+hr*.8);X.stroke();}
+        X.globalAlpha=1;
+        break;
+      case 'cyclops':
+        X.beginPath(); X.arc(hx, hy, hr*.6, 0, Math.PI*2); X.fill(); X.stroke();
+        break;
+      case 'oni':
+        X.beginPath(); X.arc(hx, hy, hr*.55, 0, Math.PI*2); X.fill(); X.stroke();
+        X.beginPath(); X.moveTo(hx-hr*.3,hy-hr*.45); X.quadraticCurveTo(hx-hr*.5,hy-hr*1.0,hx-hr*.4,hy-hr*1.1); X.stroke();
+        X.beginPath(); X.moveTo(hx+hr*.3,hy-hr*.45); X.quadraticCurveTo(hx+hr*.5,hy-hr*1.0,hx+hr*.4,hy-hr*1.1); X.stroke();
+        break;
+      default:
+        X.beginPath(); X.arc(hx, hy, hr*.5, 0, Math.PI*2); X.fill(); X.stroke();
+    }
+
+    // EYES (on the head)
+    X.fillStyle = ink;
+    if (L.blinkState > 0) {
+      // Blinking — just a line
+      if (L.numEyes === 1) {
+        X.beginPath(); X.moveTo(hx-hr*.15,hy-hr*.05); X.lineTo(hx+hr*.15,hy-hr*.05); X.stroke();
+      } else {
+        X.beginPath(); X.moveTo(hx-hr*.25,hy-hr*.05); X.lineTo(hx-hr*.05,hy-hr*.05); X.stroke();
+        X.beginPath(); X.moveTo(hx+hr*.05,hy-hr*.05); X.lineTo(hx+hr*.25,hy-hr*.05); X.stroke();
+      }
+    } else {
+      if (L.numEyes === 1) {
+        X.beginPath(); X.arc(hx, hy-hr*.05, hr*.12, 0, Math.PI*2); X.fill();
+      } else {
+        X.beginPath(); X.arc(hx-hr*.15, hy-hr*.08, hr*.08, 0, Math.PI*2); X.fill();
+        X.beginPath(); X.arc(hx+hr*.15, hy-hr*.05, hr*.07, 0, Math.PI*2); X.fill();
+      }
+    }
+
+    // TINY LEGS (if this letter-creature has them)
+    if (L.hasLegs && sp.length > 2) {
+      const legSeg = sp[sp.length-1];
+      const legSwing = Math.sin(tick*0.06+li)*legSeg.r*0.3;
+      X.strokeStyle = ink; X.lineWidth = 0.8*DPR;
+      X.beginPath();
+      X.moveTo(legSeg.x-legSeg.r*.3, legSeg.y+legSeg.r);
+      X.lineTo(legSeg.x-legSeg.r*.3+legSwing, legSeg.y+legSeg.r+hr*1.2);
+      X.moveTo(legSeg.x+legSeg.r*.3, legSeg.y+legSeg.r);
+      X.lineTo(legSeg.x+legSeg.r*.3-legSwing, legSeg.y+legSeg.r+hr*1.2);
+      X.stroke();
+    }
+
+    // TINY WINGS
+    if (L.hasWings) {
+      const wingFlap = Math.sin(tick*0.08+li*2)*hr*.8;
+      const ws = sp[Math.min(1, sp.length-1)];
+      X.globalAlpha = 0.3;
+      X.beginPath();
+      X.moveTo(ws.x, ws.y-ws.r);
+      X.bezierCurveTo(ws.x-hr*1.5, ws.y-hr*2-wingFlap, ws.x-hr*2, ws.y-hr-wingFlap, ws.x-hr*1.5, ws.y-ws.r);
+      X.stroke();
+      X.beginPath();
+      X.moveTo(ws.x, ws.y-ws.r);
+      X.bezierCurveTo(ws.x+hr*1.5, ws.y-hr*2-wingFlap, ws.x+hr*2, ws.y-hr-wingFlap, ws.x+hr*1.5, ws.y-ws.r);
+      X.stroke();
+      X.globalAlpha = 1;
+    }
+
+    // ANTENNAE
+    if (L.hasAntennae) {
+      const ab = Math.sin(tick*0.05+li)*hr*.3;
+      X.strokeStyle = ink; X.lineWidth = 0.6*DPR;
+      X.beginPath();
+      X.moveTo(hx-hr*.2, hy-hr*.4);
+      X.quadraticCurveTo(hx-hr*.3, hy-hr*1.0+ab, hx-hr*.15, hy-hr*1.1+ab);
+      X.moveTo(hx+hr*.2, hy-hr*.4);
+      X.quadraticCurveTo(hx+hr*.3, hy-hr*1.0-ab, hx+hr*.15, hy-hr*1.1-ab);
+      X.stroke();
+      X.fillStyle = ink;
+      X.beginPath(); X.arc(hx-hr*.15, hy-hr*1.1+ab, DPR, 0, Math.PI*2); X.fill();
+      X.beginPath(); X.arc(hx+hr*.15, hy-hr*1.1-ab, DPR, 0, Math.PI*2); X.fill();
+    }
+
+    // TAIL
+    if (L.hasTail && sp.length > 2) {
+      const tail = sp[sp.length-1];
+      const curl = Math.sin(tick*0.04+li)*hr;
+      X.strokeStyle = ink; X.lineWidth = 0.7*DPR;
+      X.beginPath();
+      X.moveTo(tail.x, tail.y);
+      X.bezierCurveTo(tail.x+hr*0.5, tail.y+curl, tail.x+hr*1.0, tail.y-curl*0.5, tail.x+hr*1.2, tail.y+curl*0.3);
+      X.stroke();
+    }
+
+    X.restore();
   }
 }
 
@@ -1800,6 +2125,7 @@ function resize(){
   PAGE_H=H; // will be updated by layoutAllText
   ptr.x=ptr.tx=W/2;ptr.y=ptr.ty=H*.4;
   layoutAllText();
+  initTitleCreatures();
   IC.width=W*DPR;IC.height=H*DPR;
   IC.style.width=W+'px';IC.style.height=H+'px';
   IC.style.height=PAGE_H+'px';
@@ -1861,6 +2187,9 @@ function render(){
 
   // The Worm
   drawWorm();
+
+  // Title creature-letters
+  drawTitleCreatures();
 
   // Food (ink motes, crumbs, corpses)
   renderFood();
